@@ -1,0 +1,10 @@
+{
+  "name": "make-mcp",
+  "private": true,
+  "scripts": {
+    "lint:markdown": "markdownlint \"**/*.md\""
+  },
+  "devDependencies": {
+    "markdownlint-cli": "0.48.0"
+  }
+}

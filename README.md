@@ -25,30 +25,6 @@ The declaration must be attached to the real recipe target, not to helper lines
 such as `.PHONY`. Unannotated targets are ignored, so this is an intentional
 tradeoff: make-mcp only discovers recipes you explicitly annotate.
 
-```make
-# BAD
-# @ name: Fetch the recipe
-# @ description: Fetches the recipe
-# @ risk: low
-# @ param: none
-# @ output: The recipe
-# @ output-type: text/plain
-.PHONY: recipe
-recipe:
-  echo "..."
-
-# Good
-.PHONY: recipe
-# @ name: Fetch the recipe
-# @ description: Fetches the recipe
-# @ risk: low
-# @ param: none
-# @ output: The recipe
-# @ output-type: text/plain
-recipe:
-  echo "..."
-```
-
 ### Comment format
 
 ```
@@ -63,91 +39,6 @@ recipe:
 | ` ` | **One or more spaces** must separate the delimiter from the key. |
 | `<key>` | A string matching `[a-zA-Z][a-zA-Z0-9\-]*`. |
 | `<value>` | The rest of the line after the first `:`. |
-
-### Example — no inputs (default delimiter `@`)
-
-Use `@param: none` to declare that the recipe takes no inputs. This is required;
-omitting all `@param` lines is a validation error.
-
-```makefile
-# @ name: Hello World
-# @ description: Prints a friendly greeting to stdout.
-# @ risk: low
-# @ read-only: true
-# @ destructive: false
-# @ idempotent: true
-# @ open-world: false
-# @ param: none
-# @ output: A greeting message string
-# @ output-type: text/plain
-hello-world:
-	@echo "Hello, World!"
-```
-
-Correct `.PHONY` placement:
-
-```makefile
-.PHONY: hello-world
-
-# @ name: Hello World
-# @ description: Prints a friendly greeting to stdout.
-# @ risk: low
-# @ param: none
-# @ output: A greeting message string
-# @ output-type: text/plain
-hello-world:
-	@echo "Hello, World!"
-```
-
-Incorrect placement:
-
-```makefile
-# @ name: Hello World
-# @ description: Prints a friendly greeting to stdout.
-# @ risk: low
-# @ param: none
-# @ output: A greeting message string
-# @ output-type: text/plain
-.PHONY: hello-world
-hello-world:
-	@echo "Hello, World!"
-```
-
-In the incorrect form, the annotation block is consumed by `.PHONY` and the
-recipe is not discovered as an MCP tool.
-
-### Example — with inputs
-
-Inputs are declared with one `@param` line per argument. The value field has
-the fixed format `<name> <type> | <description>`:
-
-```makefile
-# @ name: Greet User
-# @ description: Sends a personalised greeting to stdout.
-# @ risk: low
-# @ param: name string | The name to include in the greeting
-# @ param: count int | Number of times to repeat the greeting (default: 1)
-# @ output: One greeting line per repetition
-# @ output-type: text/plain
-greet:
-	@for i in $(shell seq 1 $(COUNT)); do echo "Hello, $(NAME)!"; done
-```
-
-Multiple `@param` lines are allowed. `@param: none` and named `@param` lines
-cannot be mixed in the same recipe.
-
-### Param value format
-
-```
-<name> <type> | <description>
-```
-
-| Part | Description |
-|---|---|
-| `<name>` | Identifier for the input; matches `[a-zA-Z][a-zA-Z0-9_-]*`. Maps to the environment variable or Make variable the recipe reads. |
-| `<type>` | One of `string`, `int`, `bool`. |
-| `\|` | Literal pipe character separating type from description. Must be surrounded by spaces. |
-| `<description>` | Free text describing the input, including any default value or constraints. |
 
 ### Required annotation fields
 
@@ -164,6 +55,74 @@ Recipes that are missing any required field, have an invalid `risk` value, or
 have a malformed `@param` line are reported as validation errors.
 
 Unannotated targets are silently ignored — they are not exposed as MCP tools.
+
+### Param value format
+
+Inputs are declared with one `@param` line per argument. The value field has
+the fixed format `<name> <type> | <description>`:
+
+```
+<name> <type> | <description>
+```
+
+| Part | Description |
+|---|---|
+| `<name>` | Identifier for the input; matches `[a-zA-Z][a-zA-Z0-9_-]*`. Maps to the environment variable or Make variable the recipe reads. |
+| `<type>` | One of `string`, `int`, `bool`. |
+| `\|` | Literal pipe character separating type from description. Must be surrounded by spaces. |
+| `<description>` | Free text describing the input, including any default value or constraints. |
+
+Use `@param: none` to declare that the recipe takes no inputs. This is required;
+omitting all `@param` lines is a validation error. `@param: none` and named
+`@param` lines cannot be mixed in the same recipe.
+
+### Example — no inputs
+
+```makefile
+.PHONY: hello-world
+
+# @ name: Hello World
+# @ description: Prints a friendly greeting to stdout.
+# @ risk: low
+# @ param: none
+# @ output: A greeting message string
+# @ output-type: text/plain
+hello-world:
+	@echo "Hello, World!"
+```
+
+The annotation block must be placed between `.PHONY` and the target. If it
+appears before `.PHONY`, the annotation is consumed by `.PHONY` and the recipe
+is not discovered as an MCP tool:
+
+```makefile
+# Incorrect — annotation is consumed by .PHONY, recipe is not discovered
+# @ name: Hello World
+# @ description: Prints a friendly greeting to stdout.
+# @ risk: low
+# @ param: none
+# @ output: A greeting message string
+# @ output-type: text/plain
+.PHONY: hello-world
+hello-world:
+	@echo "Hello, World!"
+```
+
+### Example — with inputs
+
+Multiple `@param` lines are allowed:
+
+```makefile
+# @ name: Greet User
+# @ description: Sends a personalised greeting to stdout.
+# @ risk: low
+# @ param: name string | The name to include in the greeting
+# @ param: count int | Number of times to repeat the greeting (default: 1)
+# @ output: One greeting line per repetition
+# @ output-type: text/plain
+greet:
+	@for i in $(shell seq 1 $(COUNT)); do echo "Hello, $(NAME)!"; done
+```
 
 ### Optional MCP tool hints
 
@@ -240,7 +199,9 @@ variables such as `OTEL_METRICS_EXPORTER`, `OTEL_TRACES_EXPORTER`,
 `OTEL_EXPORTER_OTLP_ENDPOINT`, `OTEL_EXPORTER_PROMETHEUS_HOST`, and
 `OTEL_EXPORTER_PROMETHEUS_PORT`.
 
-### CLI flags (`validate`)
+### CLI flags
+
+Both `cmd/validate` and `cmd/mcp-server` accept these flags:
 
 | Flag | Equivalent config key | Description |
 |---|---|---|
@@ -248,6 +209,13 @@ variables such as `OTEL_METRICS_EXPORTER`, `OTEL_TRACES_EXPORTER`,
 | `--delimiter <str>` | `delimiter` | Annotation delimiter string. |
 | `--makefile <path>` | `makefiles` | Makefile to parse; repeatable for multiple files. |
 | `--strict` | `strict` | Require every supported recipe annotation, including optional MCP tool hints. |
+
+`cmd/mcp-server` additionally accepts:
+
+| Flag | Equivalent config key | Description |
+|---|---|---|
+| `--transport <mode>` | `transport` | Transport to enable: `stdio`, `http`, or `both`. |
+| `--listen <addr>` | `listen` | HTTP listen address. |
 
 #### Examples
 
@@ -283,10 +251,22 @@ the server returns an MCP error instead of a successful tool result.
 make tests
 
 # Build the validator binary
+make build-validator
+
+# Build the MCP server binary
+make build-mcp-server
+
+# Build all binaries (also runs tests)
 make build
 
 # Validate the project Makefile
 make validate
+
+# Install markdown linting dependencies
+npm install
+
+# Lint markdown files
+make lint-markdown
 ```
 
 Tests are written before implementation (TDD). Run `make tests` after every

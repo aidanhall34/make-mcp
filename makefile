@@ -27,6 +27,19 @@ tests:
 format:
 	gofmt -w $$(find ./cmd ./pkg -name '*.go' -type f)
 
+# @ name: Lint Markdown
+# @ description: Lints all markdown files in the repository with markdownlint.
+# @ risk: low
+# @ read-only: true
+# @ destructive: false
+# @ idempotent: true
+# @ open-world: false
+# @ param: none
+# @ output: Markdown lint results and any rule violations
+# @ output-type: text/plain
+lint-markdown:
+	npm run lint:markdown
+
 # @ name: Build
 # @ description: Compiles all binaries to ./bin/
 # @ risk: low

@@ -93,8 +93,3 @@ scrape_configs:
   - job_name: mcp-grafana
     static_configs:
       - targets: ["mcp-grafana:8001"]
-
-  # Grafana image renderer — ENABLE_METRICS=true serves /metrics on port 8081.
-  - job_name: renderer
-    static_configs:
-      - targets: ["renderer:8081"]

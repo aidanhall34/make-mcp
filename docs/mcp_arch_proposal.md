@@ -356,9 +356,9 @@ All metrics live under the `make_mcp` namespace.
 
 ---
 
-## Additional proposals
+## Implemented additions
 
-### 1. Health and readiness endpoints (HTTP transport)
+### Health and readiness endpoints (HTTP transport)
 
 | Endpoint | Purpose |
 |----------|---------|
@@ -367,15 +367,18 @@ All metrics live under the `make_mcp` namespace.
 
 Useful for Docker health checks and Kubernetes probes.
 
-### 2. Risk-level confirmation gate (future)
+### `make-mcp.yml` live reload
 
-For `high`-risk tools, the server can optionally require the client to include
-a `"confirm": true` field in the tool call arguments before execution. If
-absent, the server returns a structured error with a human-readable explanation
-rather than running the command. Configurable per recipe via a future
-`@confirm: true` annotation or globally via `make-mcp.yml`.
+The watcher also watches `make-mcp.yml` itself (when `--config` is supplied).
+If `delimiter` changes, all Makefiles are re-parsed with the new delimiter.
+If the `makefiles` list changes, new paths are added to fsnotify and dropped
+paths are removed.
 
-### 3. Audit log
+---
+
+## Planned features
+
+### Audit log
 
 Every tool invocation is written to a structured log line (JSON) including:
 
@@ -386,18 +389,12 @@ Every tool invocation is written to a structured log line (JSON) including:
 This is separate from application logs and is always emitted regardless of
 `OTEL_TRACES_EXPORTER`.
 
-### 4. Output streaming
+### Output streaming
 
 Rather than buffering the full Make output before responding, stream stdout
 chunks back as multiple MCP `content` blocks. This improves perceived latency
 for long-running commands. Requires the `streamable HTTP` transport; falls back
 to buffered on stdio.
-
-### 5. `make-mcp.yml` live reload
-
-Watch `make-mcp.yml` in addition to the Makefiles. If `delimiter` changes,
-re-parse all Makefiles with the new delimiter. If the `makefiles` list changes,
-add new paths to fsnotify and remove dropped paths.
 
 ---
 
@@ -415,9 +412,6 @@ timeouts:
   low:    10m
   medium: 10m
   high:   10m
-
-# Require explicit confirmation for high-risk tools
-require_confirmation_for_high_risk: false
 ```
 
 Telemetry export is configured with the standard OpenTelemetry environment
