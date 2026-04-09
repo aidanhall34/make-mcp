@@ -1,0 +1,120 @@
+# Extra otelcol-contrib configuration loaded alongside the built-in LGTM config.
+# Loaded via OTELCOL_EXTRA_ARGS="--config=file:/etc/otelcol/extra.yaml".
+# Verified against otelcol-contrib 0.147.0 (grafana/otel-lgtm:latest).
+# otelcol configs have no top-level version field.
+#
+# Adds:
+#   • health_check extension on :13133
+#   • logs/make  — filelog receiver tailing dev/logs/*.log → Loki
+#   • traces/spanmetrics — fan-out from the built-in otlp receiver, generates RED metrics
+#   • metrics/spanmetrics — spanmetrics connector output → Prometheus
+#   • service.telemetry.logs — otelcol writes its own structured logs to /dev/logs/otelcol.log
+#     which the filelog/make receiver then ingests (*.log glob covers it automatically)
+#   • service.telemetry.metrics.level: detailed — full otelcol self-metrics at :8888
+
+# ── Receivers ─────────────────────────────────────────────────────────────────
+
+receivers:
+  # Explicit OTLP receiver declaration — mirrors the built-in config endpoints.
+  # Declaring it here makes the extra config self-documenting and allows the
+  # traces/spanmetrics pipeline to reference it without relying on implicit
+  # merge ordering from the built-in config.
+  # otelcol merges map keys: same endpoints win, one receiver instance is created.
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+  # Tails all log files written by make recipes (and otelcol itself — see
+  # service.telemetry.logs below which writes to /dev/logs/otelcol.log).
+  filelog/logfiles:
+    include:
+      - /dev/logs/*.log
+    start_at: end
+    poll_interval: 2s
+    include_file_name: true
+    include_file_path: false
+    fingerprint_size: 5kb
+# ── Processors ────────────────────────────────────────────────────────────────
+
+processors:
+  transform:
+    log_statements:
+      - set(resource.attributes["service.name"], log.attributes["log.file.name"]) where resource.attributes["service.name"] == nil
+  batch:
+    timeout: 5s
+
+# ── Exporters ─────────────────────────────────────────────────────────────────
+
+exporters:
+  # Loki runs at localhost inside the grafana/otel-lgtm container.
+  otlphttp/loki:
+    endpoint: http://localhost:3100/otlp
+    tls:
+      insecure: true
+    compression: gzip
+
+  # Expose application + span metrics in Prometheus exposition format.
+  # This avoids Prometheus OTLP ingestion rejecting some Codex-emitted metrics
+  # with invalid temporality/type combinations.
+  prometheus/app:
+    endpoint: 0.0.0.0:9464
+    resource_to_telemetry_conversion:
+      enabled: true
+    metric_expiration: 2m
+
+  otlphttp/tempo:
+    endpoint: http://localhost:4418
+    tls:
+      insecure: true
+    compression: gzip
+
+# ── Extensions ────────────────────────────────────────────────────────────────
+
+extensions:
+  health_check:
+    endpoint: 127.0.0.1:13133
+    path: /health/status
+    check_collector_pipeline:
+      enabled: true
+      interval: 5m
+      exporter_failure_threshold: 5
+
+# ── Service ───────────────────────────────────────────────────────────────────
+
+service:
+  extensions: [health_check]
+  telemetry:
+    logs:
+      level: info
+      encoding: json
+      # Write structured logs to /dev/logs/otelcol.log so filelog/make picks
+      # them up (the *.log glob covers this file automatically).
+      output_paths:
+        - /dev/logs/otelcol.log
+        - stdout
+    metrics:
+      # detailed exposes all available self-metrics at :8888/metrics,
+      # which Prometheus scrapes via the scrape_configs in prometheus.yaml.
+      level: detailed
+      readers:
+        - pull:
+            exporter:
+              prometheus:
+                host: "0.0.0.0"
+                port: 8888
+  pipelines:
+    logs/make:
+      receivers: [filelog/logfiles, otlp]
+      processors: [transform, batch]
+      exporters: [otlphttp/loki]
+    traces/spans:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [otlphttp/tempo]
+    metrics/spanmetrics:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [prometheus/app]

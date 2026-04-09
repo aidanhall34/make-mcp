@@ -1,0 +1,20 @@
+{
+    "mcpServers": {
+        "grafana": {
+          "type": "http",
+          "url": "http://localhost:8000/mcp"
+        },
+        "make-mcp": {
+          "type": "stdio",
+            "command": "./bin/mcp-server",
+            "args": ["--config", "make-mcp.yml"],
+            "env": {
+                "OTEL_TRACES_EXPORTER": "otlp",
+                "OTEL_METRICS_EXPORTER": "otlp",
+                "OTEL_EXPORTER_OTLP_ENDPOINT": "http://localhost:4317",
+                "OTEL_EXPORTER_OTLP_INSECURE": "true",
+                "OTEL_METRIC_EXPORT_INTERVAL": "5000"
+            }
+        }
+    }
+}

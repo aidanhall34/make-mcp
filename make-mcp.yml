@@ -1,0 +1,34 @@
+# make-mcp configuration
+# All options here have equivalent CLI flags in cmd/validate.
+# CLI flags always take precedence over this file.
+
+# delimiter: the literal string that must appear between # and the annotation key.
+# The annotation format is:  .*#<delimiter> <key>: <value>
+# Default: "@"
+delimiter: "@"
+
+# makefiles: ordered list of Makefile paths to parse.
+# Paths are relative to the working directory where the tool is run.
+makefiles:
+  - ./makefile
+
+# strict: require every supported recipe annotation.
+# When true, optional MCP tool hints (read-only, destructive, idempotent,
+# open-world) must be declared on every annotated recipe.
+strict: false
+
+# transport: MCP transport to enable.
+# One of: stdio, http, both
+# Default: "stdio"
+transport: "stdio"
+
+# listen: HTTP listen address when transport includes http.
+# Default: "127.0.0.1:9378"
+listen: "127.0.0.1:9378"
+
+# timeouts: per-risk execution timeouts for tool invocations.
+# Default: 10m for all risk levels.
+timeouts:
+  low: 10m
+  medium: 10m
+  high: 10m
