@@ -26,6 +26,7 @@ the same project context without relying on global machine configuration.
 # Makefile conventions
 
 - All commands for interacting with the repository are stored in `./makefile`.
+- Make recipes should be run through the `make-mcp` mcp server.
 - MCP recipe annotations must sit directly above the real recipe target.
 - Do not put `.PHONY` between an MCP annotation block and the recipe target.
 - `.PHONY` may be declared anywhere else in the Makefile.
