@@ -17,7 +17,16 @@ COPY . .
 # empty string to disable test telemetry export.
 ARG OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4317
 ENV OTEL_EXPORTER_OTLP_ENDPOINT=$OTEL_EXPORTER_OTLP_ENDPOINT
-RUN go test -race -cover -coverprofile=coverage.out ./...
+# -race uses ThreadSanitizer which requires a 48-bit VMA range. QEMU (used for
+# cross-platform arm64 builds on amd64 hosts) only provides 47-bit, causing
+# TSan to crash. Skip -race for arm64; it is already covered by the native
+# amd64 container build and the unit-tests CI job.
+ARG TARGETARCH
+RUN if [ "$TARGETARCH" = "arm64" ]; then \
+        go test -cover -coverprofile=coverage.out ./... ; \
+    else \
+        go test -race -cover -coverprofile=coverage.out ./... ; \
+    fi
 
 FROM alpine:3.21 AS app
 # make is required at runtime: the server invokes it to run recipe targets.

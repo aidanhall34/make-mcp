@@ -94,7 +94,7 @@ jobs:
         run: ./.github/scripts/notify-discord.sh
 
   build-and-test:
-    name: build-and-test (${{ matrix.arch }})
+    name: build-and-test (${{ matrix.type }}-${{ matrix.arch }})
     runs-on: ubuntu-latest
     needs:
       - unit-tests
@@ -102,6 +102,7 @@ jobs:
       fail-fast: false
       matrix:
         arch: [amd64, arm64]
+        type: [binary, container]
     steps:
       - name: Record start time
         id: started
@@ -130,22 +131,17 @@ jobs:
           echo "OTEL_TRACES_EXPORTER=otlp" >> "$GITHUB_ENV"
           echo "OTEL_METRICS_EXPORTER=otlp" >> "$GITHUB_ENV"
 
+      # ── Binary build ──────────────────────────────────────────────────────
       - name: Build binaries
+        if: matrix.type == 'binary'
         run: make build-binaries ARCH=${{ matrix.arch }}
 
       - name: Smoke test binaries
+        if: matrix.type == 'binary'
         run: make test-binary ARCH=${{ matrix.arch }}
 
-      - name: Build container image tar
-        run: |
-          make build-container-tar \
-            ARCH=${{ matrix.arch }} \
-            IMAGE_TAG="ci-${{ github.sha }}" \
-            OTEL_TEST_ENDPOINT="${OTEL_EXPORTER_OTLP_ENDPOINT}"
-
-      # Artifacts are uploaded before integration tests so they are available
-      # to downstream jobs even if a test fails.
       - name: Upload binaries artifact
+        if: matrix.type == 'binary'
         uses: actions/upload-artifact@v4
         with:
           name: binaries-${{ matrix.arch }}
@@ -153,7 +149,25 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
+      # ── Container build ───────────────────────────────────────────────────
+      - name: Build container image tar
+        if: matrix.type == 'container'
+        run: |
+          make build-container-tar \
+            ARCH=${{ matrix.arch }} \
+            IMAGE_TAG="ci-${{ github.sha }}" \
+            OTEL_TEST_ENDPOINT="${OTEL_EXPORTER_OTLP_ENDPOINT}"
+
+      - name: Load container image
+        if: matrix.type == 'container'
+        run: docker load -i dist/make-mcp_ci-${{ github.sha }}_linux_${{ matrix.arch }}.tar
+
+      - name: Smoke test container
+        if: matrix.type == 'container'
+        run: make smoke-test-container ARCH=${{ matrix.arch }} IMAGE_TAG="ci-${{ github.sha }}"
+
       - name: Upload container tar artifact
+        if: matrix.type == 'container'
         uses: actions/upload-artifact@v4
         with:
           name: container-${{ matrix.arch }}
@@ -161,23 +175,21 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
+      # ── Notify after build phase ──────────────────────────────────────────
       - name: Notify Discord - build
         if: always()
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
           GH_TOKEN: ${{ github.token }}
-          JOB_NAME: "build (${{ matrix.arch }})"
+          JOB_NAME: "build-${{ matrix.type }} (${{ matrix.arch }})"
           JOB_STATUS: ${{ job.status }}
           STARTED_AT: ${{ steps.started.outputs.at }}
         run: ./.github/scripts/notify-discord.sh
 
+      # ── Integration phase ─────────────────────────────────────────────────
       - name: Record integration start time
         id: integration-started
         run: echo "at=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
-
-      - name: Load container image
-        run: |
-          docker load -i dist/make-mcp_ci-${{ github.sha }}_linux_${{ matrix.arch }}.tar
 
       - name: Configure k6 OTLP
         if: env.OTEL_EXPORTER_OTLP_ENDPOINT != ''
@@ -187,7 +199,7 @@ jobs:
           echo "K6_OUT=experimental-opentelemetry" >> "$GITHUB_ENV"
           echo "K6_OTEL_GRPC_EXPORTER_ENDPOINT=${grpc}" >> "$GITHUB_ENV"
           echo "K6_OTEL_GRPC_EXPORTER_INSECURE=${OTEL_EXPORTER_OTLP_INSECURE}" >> "$GITHUB_ENV"
-        # ACT: also set k6 OTLP vars
+
       - name: Configure k6 OTLP for ACT
         if: env.ACT == 'true'
         run: |
@@ -195,23 +207,43 @@ jobs:
           echo "K6_OTEL_GRPC_EXPORTER_ENDPOINT=${ACT_OTEL_EXPORTER_OTLP_ENDPOINT:-host.docker.internal:4317}" >> "$GITHUB_ENV"
           echo "K6_OTEL_GRPC_EXPORTER_INSECURE=true" >> "$GITHUB_ENV"
 
-      - name: Integration test - tools-list
-        id: test-tools-list
+      # Binary integration tests
+      - name: Integration test binary - tools-list
+        id: test-binary-tools-list
+        if: matrix.type == 'binary'
+        continue-on-error: true
+        run: IMAGE_TAG="ci-${{ github.sha }}" K6_SCRIPT="/scripts/tools-list.js" make integration-binary ARCH=${{ matrix.arch }}
+
+      - name: Integration test binary - tools-call-hello-world
+        id: test-binary-tools-call-hello-world
+        if: matrix.type == 'binary'
+        continue-on-error: true
+        run: IMAGE_TAG="ci-${{ github.sha }}" K6_SCRIPT="/scripts/tools-call-hello-world.js" make integration-binary ARCH=${{ matrix.arch }}
+
+      # Container integration tests
+      - name: Integration test container - tools-list
+        id: test-container-tools-list
+        if: matrix.type == 'container'
         continue-on-error: true
         run: IMAGE_TAG="ci-${{ github.sha }}" K6_SCRIPT="/scripts/tools-list.js" make integration-prebuilt
 
-      - name: Integration test - tools-call-hello-world
-        id: test-tools-call-hello-world
+      - name: Integration test container - tools-call-hello-world
+        id: test-container-tools-call-hello-world
+        if: matrix.type == 'container'
         continue-on-error: true
         run: IMAGE_TAG="ci-${{ github.sha }}" K6_SCRIPT="/scripts/tools-call-hello-world.js" make integration-prebuilt
 
       - name: Fail if any integration test failed
         if: |
-          steps.test-tools-list.outcome == 'failure' ||
-          steps.test-tools-call-hello-world.outcome == 'failure'
+          steps.test-binary-tools-list.outcome == 'failure' ||
+          steps.test-binary-tools-call-hello-world.outcome == 'failure' ||
+          steps.test-container-tools-list.outcome == 'failure' ||
+          steps.test-container-tools-call-hello-world.outcome == 'failure'
         run: |
-          echo "tools-list: ${{ steps.test-tools-list.outcome }}"
-          echo "tools-call-hello-world: ${{ steps.test-tools-call-hello-world.outcome }}"
+          echo "binary-tools-list: ${{ steps.test-binary-tools-list.outcome }}"
+          echo "binary-tools-call-hello-world: ${{ steps.test-binary-tools-call-hello-world.outcome }}"
+          echo "container-tools-list: ${{ steps.test-container-tools-list.outcome }}"
+          echo "container-tools-call-hello-world: ${{ steps.test-container-tools-call-hello-world.outcome }}"
           exit 1
 
       - name: Notify Discord - integration
@@ -219,7 +251,7 @@ jobs:
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
           GH_TOKEN: ${{ github.token }}
-          JOB_NAME: "integration (${{ matrix.arch }})"
+          JOB_NAME: "integration-${{ matrix.type }} (${{ matrix.arch }})"
           JOB_STATUS: ${{ job.status }}
           STARTED_AT: ${{ steps.integration-started.outputs.at }}
         run: ./.github/scripts/notify-discord.sh

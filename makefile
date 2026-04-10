@@ -13,10 +13,11 @@ DIST_DIR ?= ./dist
 ARCH ?= amd64
 ACT_IMAGE ?= ghcr.io/catthehacker/ubuntu:act-latest
 ACT_WORKFLOW ?= ./.github/workflows/ci.yml
-ACT_EVENT ?= pull_request
+ACT_EVENT ?= push
 ACT_JOB ?=
 ACT_SECRET_FILE ?= ./.act.secrets
 ACT_OTEL_ENDPOINT ?= http://host.docker.internal:4317
+ACT_CONCURRENT_JOBS ?= 2
 DEV_COMPOSE_PROJECT ?= make-mcp-dev
 _K6_SCRIPT_SLUG := $(shell printf '%s' "$(notdir $(K6_SCRIPT))" | tr '[:upper:]' '[:lower:]' | tr -cs '[:alnum:]' '-')
 INTEGRATION_COMPOSE_PROJECT ?= make-mcp-integration-$(_K6_SCRIPT_SLUG)-$(_GIT_SHA)
@@ -35,6 +36,7 @@ _DEV_FULL_COMPOSE := $(_DEV_LGTM_COMPOSE) $(_DEV_GRAFANA_MCP_COMPOSE)
 _INTEGRATION_SERVER_COMPOSE := -f "$(DEV_DIR)/docker-compose.integration.server.yml"
 _INTEGRATION_RUNNER_COMPOSE := -f "$(DEV_DIR)/docker-compose.integration.runner.yml"
 _INTEGRATION_STACK_COMPOSE := $(_INTEGRATION_SERVER_COMPOSE) $(_INTEGRATION_RUNNER_COMPOSE)
+_INTEGRATION_BINARY_RUNNER_COMPOSE := -f "$(DEV_DIR)/docker-compose.integration.binary-runner.yml"
 _INTEGRATION_TELEMETRY_COMPOSE := -f "$(DEV_DIR)/docker-compose.integration.telemetry-host.yml"
 _DEV_COMPOSE_ENV := COMPOSE_PROJECT_NAME="$(DEV_COMPOSE_PROJECT)"
 _INTEGRATION_COMPOSE_ENV := COMPOSE_PROJECT_NAME="$(INTEGRATION_COMPOSE_PROJECT)"
@@ -573,6 +575,37 @@ define _integration-run-with-lgtm
 	}
 endef
 
+# Binary run: starts the mcp-server binary on the host in HTTP mode, waits
+# until /ready responds, then runs k6 via the binary runner compose (which
+# reaches the host via host.docker.internal). Tears down k6 and the binary
+# server on exit.
+# $(1) = compose file flags for the k6 binary runner
+define _integration-run-binary
+	@{ \
+		set -e ; \
+		mkdir -p "$(DEV_DIR)/tmp" ; \
+		mcp_server="$(DIST_DIR)/mcp-server_linux_$(ARCH)" ; \
+		chmod +x "$$mcp_server" ; \
+		printf 'starting mcp-server for binary integration (%s)...\n' "$(ARCH)" ; \
+		"$$mcp_server" \
+			--config "$(DEV_DIR)/integration/make-mcp.yml" \
+			--makefile "testdata/Makefile" & \
+		server_pid=$$! ; \
+		trap '$(MAKE) integration-stack-down INTEGRATION_COMPOSE_FILES="$(1)" ; \
+			kill "$$server_pid" 2>/dev/null || true ; \
+			rm -rf "$(DEV_DIR)/tmp"' EXIT INT TERM ; \
+		retries=20 ; \
+		until curl -sf "http://localhost:9378/ready" >/dev/null 2>&1 ; do \
+			retries=$$((retries - 1)) ; \
+			[ "$$retries" -gt 0 ] || { printf 'mcp-server did not become ready\n' ; exit 1 ; } ; \
+			sleep 1 ; \
+		done ; \
+		printf 'mcp-server ready\n' ; \
+		$(MAKE) integration-stack-down INTEGRATION_COMPOSE_FILES="$(1)" ; \
+		$(MAKE) integration-k6-run INTEGRATION_COMPOSE_FILES="$(1)" ; \
+	}
+endef
+
 # ---------------------------------------------------------------------------
 # Integration test targets
 # ---------------------------------------------------------------------------
@@ -735,8 +768,23 @@ build-release-archives:
 integration-prebuilt: integration-build-k6
 	$(call _integration-run,$(_INTEGRATION_STACK_COMPOSE))
 
+.PHONY: integration-binary
+# @ name: Binary Integration Tests
+# @ description: Starts the pre-built mcp-server binary on the host in HTTP mode and runs k6 MCP protocol integration tests against it via host.docker.internal. Does not use a container for the server. Run build-binaries first to produce the binaries.
+# @ risk: medium
+# @ read-only: true
+# @ destructive: false
+# @ idempotent: true
+# @ open-world: true
+# @ param: ARCH string | Target architecture: amd64 or arm64 (default: amd64)
+# @ param: K6_SCRIPT string | Path inside the k6 container to the test script (default: /scripts/integration.js)
+# @ output: k6 integration test results and pass/fail summary
+# @ output-type: text/plain
+integration-binary: integration-build-k6
+	$(call _integration-run-binary,$(_INTEGRATION_BINARY_RUNNER_COMPOSE))
+
 # @ name: Binary Smoke Tests
-# @ description: Runs smoke tests against the pre-built mcp-server and validate binaries in ./dist for the target architecture. Verifies that validate accepts the project makefile and that both binaries are executable. On an amd64 host, arm64 binaries require QEMU binfmt_misc registration (provided automatically by docker/setup-qemu-action in CI).
+# @ description: Runs smoke tests against the pre-built mcp-server and validate binaries in ./dist for the target architecture. Verifies that validate accepts the project makefile, starts the MCP server in HTTP mode, polls /ready, and confirms it responds. On an amd64 host, arm64 binaries require QEMU binfmt_misc registration (provided automatically by docker/setup-qemu-action in CI).
 # @ risk: low
 # @ read-only: true
 # @ destructive: false
@@ -757,7 +805,58 @@ test-binary:
 		done ; \
 		printf 'smoke testing validate (%s)...\n' "$(ARCH)" ; \
 		"$$validate_bin" --config make-mcp.yml ; \
-		printf 'binary smoke tests passed (%s)\n' "$(ARCH)" ; \
+		printf 'starting mcp-server in HTTP mode (%s)...\n' "$(ARCH)" ; \
+		"$$mcp_server" \
+			--config "$(DEV_DIR)/integration/make-mcp.yml" \
+			--makefile "testdata/Makefile" & \
+		server_pid=$$! ; \
+		trap 'kill "$$server_pid" 2>/dev/null || true' EXIT INT TERM ; \
+		retries=30 ; \
+		until curl -sf "http://localhost:9378/ready" >/dev/null 2>&1 ; do \
+			retries=$$((retries - 1)) ; \
+			[ "$$retries" -gt 0 ] || { printf 'mcp-server did not become ready\n' ; exit 1 ; } ; \
+			sleep 2 ; \
+		done ; \
+		printf 'mcp-server ready (%s)\n' "$(ARCH)" ; \
+		curl -sf "http://localhost:9378/ready" ; \
+		printf '\nbinary smoke tests passed (%s)\n' "$(ARCH)" ; \
+	}
+
+# @ name: Container Smoke Test
+# @ description: Runs a container smoke test against the pre-loaded image for the target architecture. Starts the container in HTTP mode with testdata/Makefile mounted, polls /ready, and confirms it responds. On an amd64 host, arm64 images require QEMU (provided by docker/setup-qemu-action in CI).
+# @ risk: low
+# @ read-only: true
+# @ destructive: false
+# @ idempotent: true
+# @ open-world: true
+# @ param: ARCH string | Target architecture: amd64 or arm64 (default: amd64)
+# @ param: IMAGE_TAG string | Tag of the pre-loaded container image (default: git tag or short SHA)
+# @ output: Pass/fail summary for the container smoke test
+# @ output-type: text/plain
+.PHONY: smoke-test-container
+smoke-test-container:
+	@{ \
+		set -e ; \
+		image="$(IMAGE_NAME):$(IMAGE_TAG)" ; \
+		container_name="make-mcp-smoke-$(ARCH)" ; \
+		printf 'smoke testing container %s (%s)...\n' "$$image" "$(ARCH)" ; \
+		docker rm -f "$$container_name" 2>/dev/null || true ; \
+		docker run -d \
+			--name "$$container_name" \
+			-p 9378:9378 \
+			-v "$(CURDIR)/testdata/Makefile:/opt/make-mcp/makefile:ro" \
+			"$$image" \
+			--transport http --listen 0.0.0.0:9378 ; \
+		trap 'docker rm -f "$$container_name" 2>/dev/null || true' EXIT INT TERM ; \
+		retries=30 ; \
+		until curl -sf "http://localhost:9378/ready" >/dev/null 2>&1 ; do \
+			retries=$$((retries - 1)) ; \
+			[ "$$retries" -gt 0 ] || { printf 'container did not become ready\n' ; exit 1 ; } ; \
+			sleep 2 ; \
+		done ; \
+		printf 'container ready\n' ; \
+		curl -sf "http://localhost:9378/ready" ; \
+		printf '\ncontainer smoke test passed (%s)\n' "$(ARCH)" ; \
 	}
 
 # @ name: Upload Discord Webhook Secret
@@ -826,6 +925,7 @@ act-run:
 			--env "ACT_OTEL_EXPORTER_OTLP_ENDPOINT=$(ACT_OTEL_ENDPOINT)" \
 			--secret "GH_TOKEN=$$token" \
 			--secret "GITHUB_TOKEN=$$token" \
+			--concurrent-jobs "$(ACT_CONCURRENT_JOBS)" \
 			$(ACT_EVENT) \
 			$$act_args ; \
 	}
