@@ -133,6 +133,9 @@ jobs:
       - name: Build binaries
         run: make build-binaries ARCH=${{ matrix.arch }}
 
+      - name: Smoke test binaries
+        run: make test-binary ARCH=${{ matrix.arch }}
+
       - name: Build container image tar
         run: |
           make build-container-tar \

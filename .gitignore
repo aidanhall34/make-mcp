@@ -1,8 +1,8 @@
 bin/
 dist/
 dev/logs
-GEMINI.md
 node_modules/
-coverage.out
 dev/tmp
+GEMINI.md
+coverage.out
 .act.secrets

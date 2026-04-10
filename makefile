@@ -39,6 +39,23 @@ _INTEGRATION_TELEMETRY_COMPOSE := -f "$(DEV_DIR)/docker-compose.integration.tele
 _DEV_COMPOSE_ENV := COMPOSE_PROJECT_NAME="$(DEV_COMPOSE_PROJECT)"
 _INTEGRATION_COMPOSE_ENV := COMPOSE_PROJECT_NAME="$(INTEGRATION_COMPOSE_PROJECT)"
 
+# @ name: Clean
+# @ description: Removes all build artifacts, logs, temporary files, and node modules.
+# @ risk: medium
+# @ read-only: false
+# @ destructive: true
+# @ idempotent: true
+# @ open-world: false
+# @ param: none
+# @ output: None
+# @ output-type: text/plain
+clean:
+	rm -rf "./bin"
+	rm -rf "$(DIST_DIR)"
+	rm -rf "$(DEV_DIR)/logs"
+	rm -rf "$(DEV_DIR)/tmp"
+	go clean -testcache
+
 # @ name: Test
 # @ description: Runs all Go unit and benchmark tests with race detection and coverage enabled. Each package enforces its own coverage threshold via TestMain and emits per-file JSON coverage to stderr.
 # @ risk: low
@@ -91,6 +108,34 @@ bench:
 format:
 	gofmt -w $$(find ./cmd ./pkg -name '*.go' -type f)
 
+# @ name: Tidy
+# @ description: Synchronizes the go.mod and go.sum files with the source code.
+# @ risk: low
+# @ read-only: false
+# @ destructive: false
+# @ idempotent: true
+# @ open-world: true
+# @ param: none
+# @ output: None
+# @ output-type: text/plain
+tidy:
+	go mod tidy
+	go mod verify
+
+# @ name: Lint Tidy
+# @ description: Verifies that go.mod and go.sum are synchronized (fails if changes are needed).
+# @ risk: low
+# @ read-only: true
+# @ destructive: false
+# @ idempotent: true
+# @ open-world: true
+# @ param: none
+# @ output: Git diff exit code and any required changes
+# @ output-type: text/plain
+lint-tidy:
+	go mod tidy
+	git diff --exit-code "go.mod" "go.sum"
+
 # @ name: Lint Markdown
 # @ description: Lints all markdown files in the repository with markdownlint.
 # @ risk: low
@@ -134,7 +179,7 @@ lint-go:
 # @ param: none
 # @ output: Lint and validation results
 # @ output-type: text/plain
-lint: format lint-go lint-markdown validate
+lint: lint-go lint-markdown lint-tidy validate
 
 # @ name: Build
 # @ description: Compiles all binaries and builds all containers
@@ -194,6 +239,33 @@ build-validator:
 # @ output-type: application/octet-stream
 build-mcp-server:
 	go build -o ./bin/mcp-server ./cmd/mcp-server
+
+# @ name: Run
+# @ description: Compiles and runs the MCP server locally using the default configuration.
+# @ risk: low
+# @ read-only: false
+# @ destructive: false
+# @ idempotent: false
+# @ open-world: true
+# @ param: none
+# @ output: MCP server logs
+# @ output-type: text/plain
+run: build
+	"./bin/mcp-server" -config "make-mcp.yml"
+
+# @ name: Install
+# @ description: Installs the mcp-server and validator binaries to the user's Go bin directory.
+# @ risk: low
+# @ read-only: false
+# @ destructive: false
+# @ idempotent: true
+# @ open-world: true
+# @ param: none
+# @ output: Installation logs
+# @ output-type: text/plain
+install:
+	go install "./cmd/mcp-server"
+	go install "./cmd/validate"
 
 # @ name: Validate Makefile
 # @ description: Runs the validator against the project Makefile using the make-mcp.yml config.
@@ -262,7 +334,7 @@ prometheus-validate:
 		/otel-lgtm/prometheus/promtool check config \
 			/etc/prometheus/prometheus.yaml; }
 
-
+.PHONY: dev-volumes
 # @ name: Development docker volumes
 # @ description: Creates docker volumes for the docker compose lgtm stack (idempotent)
 # @ risk: low
@@ -273,7 +345,6 @@ prometheus-validate:
 # @ param: none
 # @ output: Confirmation that the volume has been created
 # @ output-type: text/plain
-.PHONY: dev-volumes
 dev-volumes:
 	docker volume create make-mcp-lgtm-prometheus-data
 	docker volume create make-mcp-lgtm-loki-data
@@ -379,7 +450,7 @@ publish: build-container
 
 .PHONY: integration-debug
 # @ name: Integration Debug (local LGTM)
-# @ description: Ensures the dev LGTM stack and MCP server are running, then starts k6 or attaches to an already-running k6 session. LGTM is never stopped by this target — use dev-down to tear it down manually. k6 stops on a non-zero exit and will not be restarted until this target is run again.
+# @ description: Ensures the dev LGTM stack and MCP server are running, then attaches k6 in detached mode. LGTM is never stopped by this target — use dev-down to tear it down manually.
 # @ risk: low
 # @ read-only: true
 # @ destructive: false
@@ -392,27 +463,16 @@ integration-debug: integration-build-k6
 	@{ \
 		set -e ; \
 		mkdir -p "$(DEV_DIR)/tmp" ; \
-		$(_DEV_COMPOSE_ENV) docker compose \
-			$(_DEV_FULL_COMPOSE) \
-			--env-file="$(DEV_DIR)/compose_versions" \
-			up -d --wait ; \
-		MAKE_MCP_IMAGE="$(IMAGE_NAME):$(IMAGE_TAG)" K6_IMAGE="$(K6_IMAGE)" K6_SCRIPT="$(K6_SCRIPT)" $(_SERVER_OTEL_ENV) $(_K6_OTEL_ENV) \
-			$(_INTEGRATION_COMPOSE_ENV) docker compose \
-				$(_INTEGRATION_STACK_COMPOSE) \
-				$(_INTEGRATION_TELEMETRY_COMPOSE) \
-				up -d --wait make-mcp-server ; \
-		MAKE_MCP_IMAGE="$(IMAGE_NAME):$(IMAGE_TAG)" K6_IMAGE="$(K6_IMAGE)" K6_SCRIPT="$(K6_SCRIPT)" $(_SERVER_OTEL_ENV) $(_K6_OTEL_ENV) \
-			$(_INTEGRATION_COMPOSE_ENV) docker compose \
-				$(_INTEGRATION_STACK_COMPOSE) \
-				$(_INTEGRATION_TELEMETRY_COMPOSE) \
-				up -d --no-deps k6 ; \
+		$(_DEV_COMPOSE_ENV) docker compose $(_DEV_FULL_COMPOSE) \
+			--env-file="$(DEV_DIR)/compose_versions" up -d --wait ; \
+		$(MAKE) integration-server-up INTEGRATION_COMPOSE_FILES="$(_INTEGRATION_OTEL_COMPOSE)" ; \
+		$(MAKE) integration-k6-attach INTEGRATION_COMPOSE_FILES="$(_INTEGRATION_OTEL_COMPOSE)" ; \
 	}
 
 K6_IMAGE ?= make-mcp-k6:local
 K6_SCRIPT ?= /scripts/integration.js
 
-# OTel env vars forwarded to the integration containers when an external or
-# host LGTM collector is the telemetry target.
+# OTel env vars forwarded to the integration containers.
 _K6_OTEL_ENV := K6_OUT=$(K6_OUT) \
 	K6_OTEL_GRPC_EXPORTER_ENDPOINT=$(K6_OTEL_GRPC_EXPORTER_ENDPOINT) \
 	K6_OTEL_GRPC_EXPORTER_INSECURE=$(K6_OTEL_GRPC_EXPORTER_INSECURE) \
@@ -425,6 +485,21 @@ _SERVER_OTEL_ENV := OTEL_TRACES_EXPORTER=$(OTEL_TRACES_EXPORTER) \
 	OTEL_SERVICE_NAME=$(OTEL_SERVICE_NAME) \
 	OTEL_METRIC_EXPORT_INTERVAL=$(OTEL_METRIC_EXPORT_INTERVAL)
 
+# All env vars forwarded to every integration container.
+_INTEGRATION_RUN_ENV = \
+	MAKE_MCP_IMAGE="$(IMAGE_NAME):$(IMAGE_TAG)" \
+	K6_IMAGE="$(K6_IMAGE)" \
+	K6_SCRIPT="$(K6_SCRIPT)" \
+	$(_SERVER_OTEL_ENV) \
+	$(_K6_OTEL_ENV)
+
+# Compose files for integration runs that include a telemetry host sidecar.
+_INTEGRATION_OTEL_COMPOSE := $(_INTEGRATION_STACK_COMPOSE) $(_INTEGRATION_TELEMETRY_COMPOSE)
+
+# ---------------------------------------------------------------------------
+# Composable integration helpers
+# ---------------------------------------------------------------------------
+
 # Builds the custom k6+xk6-mcp image used by the integration test stack.
 .PHONY: integration-build-k6
 integration-build-k6:
@@ -433,9 +508,78 @@ integration-build-k6:
 		-t "$(K6_IMAGE)" \
 		"$(DEV_DIR)/integration/k6"
 
+# Tears down the integration stack (idempotent, never fails).
+.PHONY: integration-stack-down
+integration-stack-down:
+	-$(_INTEGRATION_COMPOSE_ENV) docker compose \
+		$(INTEGRATION_COMPOSE_FILES) \
+		down --remove-orphans >/dev/null 2>&1
+
+# Starts the MCP server container and waits until it is healthy.
+.PHONY: integration-server-up
+integration-server-up:
+	$(_INTEGRATION_RUN_ENV) \
+		$(_INTEGRATION_COMPOSE_ENV) docker compose \
+		$(INTEGRATION_COMPOSE_FILES) \
+		up -d --wait make-mcp-server
+
+# Runs k6, blocking until it exits. Returns k6's exit code.
+.PHONY: integration-k6-run
+integration-k6-run:
+	$(_INTEGRATION_RUN_ENV) \
+		$(_INTEGRATION_COMPOSE_ENV) docker compose \
+		$(INTEGRATION_COMPOSE_FILES) \
+		up --abort-on-container-exit --exit-code-from k6 k6
+
+# Starts k6 in detached mode (for interactive/debug use).
+.PHONY: integration-k6-attach
+integration-k6-attach:
+	$(_INTEGRATION_RUN_ENV) \
+		$(_INTEGRATION_COMPOSE_ENV) docker compose \
+		$(INTEGRATION_COMPOSE_FILES) \
+		up -d --no-deps k6
+
+# ---------------------------------------------------------------------------
+# Integration run macros
+# $(1) = compose file flags (e.g. $(_INTEGRATION_STACK_COMPOSE) or $(_INTEGRATION_OTEL_COMPOSE))
+# ---------------------------------------------------------------------------
+
+# Standard run: set up tmp, register cleanup trap, start server, run k6.
+define _integration-run
+	@{ \
+		set -e ; \
+		mkdir -p "$(DEV_DIR)/tmp" ; \
+		trap '$(MAKE) integration-stack-down INTEGRATION_COMPOSE_FILES="$(1)" ; rm -rf "$(DEV_DIR)/tmp"' EXIT INT TERM ; \
+		$(MAKE) integration-stack-down INTEGRATION_COMPOSE_FILES="$(1)" ; \
+		$(MAKE) integration-server-up INTEGRATION_COMPOSE_FILES="$(1)" ; \
+		$(MAKE) integration-k6-run INTEGRATION_COMPOSE_FILES="$(1)" ; \
+	}
+endef
+
+# LGTM run: like standard but also starts and tears down the dev LGTM stack.
+define _integration-run-with-lgtm
+	@{ \
+		set -e ; \
+		mkdir -p "$(DEV_DIR)/tmp" ; \
+		$(_DEV_COMPOSE_ENV) docker compose $(_DEV_FULL_COMPOSE) \
+			--env-file="$(DEV_DIR)/compose_versions" up -d --wait ; \
+		trap '$(MAKE) integration-stack-down INTEGRATION_COMPOSE_FILES="$(1)" ; \
+			rm -rf "$(DEV_DIR)/tmp" ; \
+			$(_DEV_COMPOSE_ENV) docker compose $(_DEV_FULL_COMPOSE) \
+				--env-file="$(DEV_DIR)/compose_versions" down' EXIT INT TERM ; \
+		$(MAKE) integration-stack-down INTEGRATION_COMPOSE_FILES="$(1)" ; \
+		$(MAKE) integration-server-up INTEGRATION_COMPOSE_FILES="$(1)" ; \
+		$(MAKE) integration-k6-run INTEGRATION_COMPOSE_FILES="$(1)" ; \
+	}
+endef
+
+# ---------------------------------------------------------------------------
+# Integration test targets
+# ---------------------------------------------------------------------------
+
 .PHONY: integration
 # @ name: Integration Tests
-# @ description: Builds the k6+xk6-mcp image, starts the MCP server container with HTTP transport, runs MCP protocol integration tests (tools/list and tools/call) via k6, then tears everything down. All artefacts are written to ./dev/tmp/ and removed on exit.
+# @ description: Builds everything, starts the MCP server container, runs MCP protocol integration tests via k6, then tears everything down.
 # @ risk: medium
 # @ read-only: true
 # @ destructive: false
@@ -445,20 +589,11 @@ integration-build-k6:
 # @ output: k6 integration test results and pass/fail summary
 # @ output-type: text/plain
 integration: build
-	@{ \
-		set -e ; \
-		mkdir -p "$(DEV_DIR)/tmp" ; \
-		trap '$(_INTEGRATION_COMPOSE_ENV) docker compose $(_INTEGRATION_STACK_COMPOSE) down --remove-orphans ; rm -rf "$(DEV_DIR)/tmp"' EXIT INT TERM ; \
-		$(_INTEGRATION_COMPOSE_ENV) docker compose $(_INTEGRATION_STACK_COMPOSE) down --remove-orphans >/dev/null 2>&1 || true ; \
-		MAKE_MCP_IMAGE="$(IMAGE_NAME):$(IMAGE_TAG)" K6_IMAGE="$(K6_IMAGE)" K6_SCRIPT="$(K6_SCRIPT)" \
-			$(_INTEGRATION_COMPOSE_ENV) docker compose $(_INTEGRATION_STACK_COMPOSE) up -d --wait make-mcp-server ; \
-		MAKE_MCP_IMAGE="$(IMAGE_NAME):$(IMAGE_TAG)" K6_IMAGE="$(K6_IMAGE)" K6_SCRIPT="$(K6_SCRIPT)" \
-			$(_INTEGRATION_COMPOSE_ENV) docker compose $(_INTEGRATION_STACK_COMPOSE) up --abort-on-container-exit --exit-code-from k6 k6 ; \
-	}
+	$(call _integration-run,$(_INTEGRATION_STACK_COMPOSE))
 
 .PHONY: integration-lgtm
 # @ name: Integration Tests (with LGTM)
-# @ description: Starts the full local development stack, runs the MCP protocol integration tests with OTel metrics and traces exported to LGTM, then tears down both the integration stack and the local dev stack on exit.
+# @ description: Starts the full local LGTM development stack, runs integration tests with OTel telemetry, then tears down both the integration stack and the LGTM stack on exit.
 # @ risk: medium
 # @ read-only: true
 # @ destructive: false
@@ -468,32 +603,11 @@ integration: build
 # @ output: k6 integration test results and pass/fail summary
 # @ output-type: text/plain
 integration-lgtm: integration-build-k6 build-container dev-volumes
-	@{ \
-		set -e ; \
-		mkdir -p "$(DEV_DIR)/tmp" ; \
-		$(_DEV_COMPOSE_ENV) docker compose $(_DEV_FULL_COMPOSE) --env-file="$(DEV_DIR)/compose_versions" up -d --wait ; \
-		trap '$(_INTEGRATION_COMPOSE_ENV) docker compose \
-				$(_INTEGRATION_STACK_COMPOSE) \
-				$(_INTEGRATION_TELEMETRY_COMPOSE) \
-				down --remove-orphans ; \
-			rm -rf "$(DEV_DIR)/tmp" ; \
-			$(_DEV_COMPOSE_ENV) docker compose $(_DEV_FULL_COMPOSE) --env-file="$(DEV_DIR)/compose_versions" down' EXIT INT TERM ; \
-		$(_INTEGRATION_COMPOSE_ENV) docker compose $(_INTEGRATION_STACK_COMPOSE) $(_INTEGRATION_TELEMETRY_COMPOSE) down --remove-orphans >/dev/null 2>&1 || true ; \
-		MAKE_MCP_IMAGE="$(IMAGE_NAME):$(IMAGE_TAG)" K6_IMAGE="$(K6_IMAGE)" K6_SCRIPT="$(K6_SCRIPT)" $(_SERVER_OTEL_ENV) $(_K6_OTEL_ENV) \
-			$(_INTEGRATION_COMPOSE_ENV) docker compose \
-				$(_INTEGRATION_STACK_COMPOSE) \
-				$(_INTEGRATION_TELEMETRY_COMPOSE) \
-				up -d --wait make-mcp-server ; \
-		MAKE_MCP_IMAGE="$(IMAGE_NAME):$(IMAGE_TAG)" K6_IMAGE="$(K6_IMAGE)" K6_SCRIPT="$(K6_SCRIPT)" $(_SERVER_OTEL_ENV) $(_K6_OTEL_ENV) \
-			$(_INTEGRATION_COMPOSE_ENV) docker compose \
-				$(_INTEGRATION_STACK_COMPOSE) \
-				$(_INTEGRATION_TELEMETRY_COMPOSE) \
-				up --abort-on-container-exit --exit-code-from k6 k6 ; \
-	}
+	$(call _integration-run-with-lgtm,$(_INTEGRATION_OTEL_COMPOSE))
 
 .PHONY: integration-otel
 # @ name: Integration Tests (OTel, LGTM already running)
-# @ description: Runs the MCP protocol integration tests with OTel output to an existing OTLP collector, such as a host LGTM stack. It does not start or stop the collector and tears down only the integration containers on exit.
+# @ description: Runs integration tests with OTel output to an existing OTLP collector. Does not start or stop the collector; tears down only the integration containers on exit.
 # @ risk: medium
 # @ read-only: true
 # @ destructive: false
@@ -503,49 +617,11 @@ integration-lgtm: integration-build-k6 build-container dev-volumes
 # @ output: k6 integration test results and pass/fail summary
 # @ output-type: text/plain
 integration-otel: integration-build-k6 build-container
-	@{ \
-		set -e ; \
-		mkdir -p "$(DEV_DIR)/tmp" ; \
-		trap '$(_INTEGRATION_COMPOSE_ENV) docker compose \
-				$(_INTEGRATION_STACK_COMPOSE) \
-				$(_INTEGRATION_TELEMETRY_COMPOSE) \
-				down --remove-orphans ; \
-			rm -rf "$(DEV_DIR)/tmp"' EXIT INT TERM ; \
-		$(_INTEGRATION_COMPOSE_ENV) docker compose $(_INTEGRATION_STACK_COMPOSE) $(_INTEGRATION_TELEMETRY_COMPOSE) down --remove-orphans >/dev/null 2>&1 || true ; \
-		MAKE_MCP_IMAGE="$(IMAGE_NAME):$(IMAGE_TAG)" K6_IMAGE="$(K6_IMAGE)" K6_SCRIPT="$(K6_SCRIPT)" $(_SERVER_OTEL_ENV) $(_K6_OTEL_ENV) \
-			$(_INTEGRATION_COMPOSE_ENV) docker compose \
-				$(_INTEGRATION_STACK_COMPOSE) \
-				$(_INTEGRATION_TELEMETRY_COMPOSE) \
-				up -d --wait make-mcp-server ; \
-		MAKE_MCP_IMAGE="$(IMAGE_NAME):$(IMAGE_TAG)" K6_IMAGE="$(K6_IMAGE)" K6_SCRIPT="$(K6_SCRIPT)" $(_SERVER_OTEL_ENV) $(_K6_OTEL_ENV) \
-			$(_INTEGRATION_COMPOSE_ENV) docker compose \
-				$(_INTEGRATION_STACK_COMPOSE) \
-				$(_INTEGRATION_TELEMETRY_COMPOSE) \
-				up --abort-on-container-exit --exit-code-from k6 k6 ; \
-	}
+	$(call _integration-run,$(_INTEGRATION_OTEL_COMPOSE))
 
 .PHONY: integration-act
 integration-act: integration-build-k6 build-container dev-up-lgtm
-	@{ \
-		set -e ; \
-		mkdir -p "$(DEV_DIR)/tmp" ; \
-		trap '$(_INTEGRATION_COMPOSE_ENV) docker compose \
-				$(_INTEGRATION_STACK_COMPOSE) \
-				$(_INTEGRATION_TELEMETRY_COMPOSE) \
-				down --remove-orphans ; \
-			rm -rf "$(DEV_DIR)/tmp"' EXIT INT TERM ; \
-		$(_INTEGRATION_COMPOSE_ENV) docker compose $(_INTEGRATION_STACK_COMPOSE) $(_INTEGRATION_TELEMETRY_COMPOSE) down --remove-orphans >/dev/null 2>&1 || true ; \
-		MAKE_MCP_IMAGE="$(IMAGE_NAME):$(IMAGE_TAG)" K6_IMAGE="$(K6_IMAGE)" K6_SCRIPT="$(K6_SCRIPT)" $(_SERVER_OTEL_ENV) $(_K6_OTEL_ENV) \
-			$(_INTEGRATION_COMPOSE_ENV) docker compose \
-				$(_INTEGRATION_STACK_COMPOSE) \
-				$(_INTEGRATION_TELEMETRY_COMPOSE) \
-				up -d --wait make-mcp-server ; \
-		MAKE_MCP_IMAGE="$(IMAGE_NAME):$(IMAGE_TAG)" K6_IMAGE="$(K6_IMAGE)" K6_SCRIPT="$(K6_SCRIPT)" $(_SERVER_OTEL_ENV) $(_K6_OTEL_ENV) \
-			$(_INTEGRATION_COMPOSE_ENV) docker compose \
-				$(_INTEGRATION_STACK_COMPOSE) \
-				$(_INTEGRATION_TELEMETRY_COMPOSE) \
-				up --abort-on-container-exit --exit-code-from k6 k6 ; \
-	}
+	$(call _integration-run,$(_INTEGRATION_OTEL_COMPOSE))
 
 # @ name: Build Binaries
 # @ description: Cross-compiles mcp-server and validate for the target Linux architecture and writes them to ./dist. Used by CI to produce per-arch artifacts before packaging.
@@ -657,15 +733,31 @@ build-release-archives:
 # @ output-type: text/plain
 .PHONY: integration-prebuilt
 integration-prebuilt: integration-build-k6
+	$(call _integration-run,$(_INTEGRATION_STACK_COMPOSE))
+
+# @ name: Binary Smoke Tests
+# @ description: Runs smoke tests against the pre-built mcp-server and validate binaries in ./dist for the target architecture. Verifies that validate accepts the project makefile and that both binaries are executable. On an amd64 host, arm64 binaries require QEMU binfmt_misc registration (provided automatically by docker/setup-qemu-action in CI).
+# @ risk: low
+# @ read-only: true
+# @ destructive: false
+# @ idempotent: true
+# @ open-world: false
+# @ param: ARCH string | Target architecture: amd64 or arm64 (default: amd64)
+# @ output: Pass/fail summary for each binary
+# @ output-type: text/plain
+.PHONY: test-binary
+test-binary:
 	@{ \
 		set -e ; \
-		mkdir -p "$(DEV_DIR)/tmp" ; \
-		trap '$(_INTEGRATION_COMPOSE_ENV) docker compose $(_INTEGRATION_STACK_COMPOSE) down --remove-orphans ; rm -rf "$(DEV_DIR)/tmp"' EXIT INT TERM ; \
-		$(_INTEGRATION_COMPOSE_ENV) docker compose $(_INTEGRATION_STACK_COMPOSE) down --remove-orphans >/dev/null 2>&1 || true ; \
-		MAKE_MCP_IMAGE="$(IMAGE_NAME):$(IMAGE_TAG)" K6_IMAGE="$(K6_IMAGE)" K6_SCRIPT="$(K6_SCRIPT)" $(_SERVER_OTEL_ENV) $(_K6_OTEL_ENV) \
-			$(_INTEGRATION_COMPOSE_ENV) docker compose $(_INTEGRATION_STACK_COMPOSE) up -d --wait make-mcp-server ; \
-		MAKE_MCP_IMAGE="$(IMAGE_NAME):$(IMAGE_TAG)" K6_IMAGE="$(K6_IMAGE)" K6_SCRIPT="$(K6_SCRIPT)" $(_SERVER_OTEL_ENV) $(_K6_OTEL_ENV) \
-			$(_INTEGRATION_COMPOSE_ENV) docker compose $(_INTEGRATION_STACK_COMPOSE) up --abort-on-container-exit --exit-code-from k6 k6 ; \
+		mcp_server="$(DIST_DIR)/mcp-server_linux_$(ARCH)" ; \
+		validate_bin="$(DIST_DIR)/validate_linux_$(ARCH)" ; \
+		for f in "$$mcp_server" "$$validate_bin"; do \
+			[ -f "$$f" ] || { printf 'binary not found: %s\n' "$$f" ; exit 1 ; } ; \
+			chmod +x "$$f" ; \
+		done ; \
+		printf 'smoke testing validate (%s)...\n' "$(ARCH)" ; \
+		"$$validate_bin" --config make-mcp.yml ; \
+		printf 'binary smoke tests passed (%s)\n' "$(ARCH)" ; \
 	}
 
 # @ name: Upload Discord Webhook Secret
