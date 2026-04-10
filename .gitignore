@@ -1,4 +1,5 @@
 bin/
+dist/
 dev/logs
 GEMINI.md
 node_modules/

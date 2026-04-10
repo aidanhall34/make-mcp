@@ -638,6 +638,19 @@
         "x": 0,
         "y": 35
       },
+      "id": 68,
+      "panels": [],
+      "title": "Gemini",
+      "type": "row"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 36
+      },
       "id": 60,
       "panels": [],
       "title": "Codex",
@@ -675,7 +688,7 @@
         "h": 10,
         "w": 6,
         "x": 0,
-        "y": 36
+        "y": 37
       },
       "id": 61,
       "options": {
@@ -764,38 +777,13 @@
           },
           "unit": "s"
         },
-        "overrides": [
-          {
-            "__systemRef": "hideSeriesFrom",
-            "matcher": {
-              "id": "byNames",
-              "options": {
-                "mode": "exclude",
-                "names": [
-                  "{model=\"gpt-5.4\", success=\"false\", tool=\"apply_patch\"}"
-                ],
-                "prefix": "All except:",
-                "readOnly": true
-              }
-            },
-            "properties": [
-              {
-                "id": "custom.hideFrom",
-                "value": {
-                  "legend": false,
-                  "tooltip": true,
-                  "viz": true
-                }
-              }
-            ]
-          }
-        ]
+        "overrides": []
       },
       "gridPos": {
         "h": 10,
         "w": 6,
         "x": 6,
-        "y": 36
+        "y": 37
       },
       "id": 62,
       "options": {
@@ -890,7 +878,7 @@
         "h": 10,
         "w": 6,
         "x": 12,
-        "y": 36
+        "y": 37
       },
       "id": 63,
       "options": {
@@ -986,7 +974,7 @@
         "h": 10,
         "w": 6,
         "x": 18,
-        "y": 36
+        "y": 37
       },
       "id": 64,
       "options": {
@@ -1090,7 +1078,7 @@
         "h": 11,
         "w": 12,
         "x": 0,
-        "y": 46
+        "y": 47
       },
       "id": 52,
       "options": {
@@ -1154,7 +1142,7 @@
         "h": 11,
         "w": 6,
         "x": 12,
-        "y": 46
+        "y": 47
       },
       "id": 66,
       "options": {
@@ -1258,7 +1246,7 @@
         "h": 11,
         "w": 6,
         "x": 18,
-        "y": 46
+        "y": 47
       },
       "id": 65,
       "options": {
@@ -1282,7 +1270,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(rate(codex_turn_token_usage_sum[$__rate_interval])) by (model, token_type)",
+          "expr": "sum(rate(codex_turn_token_usage_sum{token_type!=\"total\"}[$__rate_interval])) by (model, token_type)",
           "instant": false,
           "legendFormat": "__auto",
           "range": true,
@@ -1298,7 +1286,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 57
+        "y": 58
       },
       "id": 6,
       "panels": [],
@@ -1371,7 +1359,7 @@
         "h": 12,
         "w": 8,
         "x": 0,
-        "y": 58
+        "y": 59
       },
       "id": 4,
       "options": {
@@ -1433,7 +1421,7 @@
         "h": 12,
         "w": 5,
         "x": 8,
-        "y": 58
+        "y": 59
       },
       "id": 1,
       "options": {
@@ -1505,7 +1493,7 @@
         "h": 12,
         "w": 4,
         "x": 13,
-        "y": 58
+        "y": 59
       },
       "id": 2,
       "options": {
@@ -1566,7 +1554,7 @@
         "h": 12,
         "w": 7,
         "x": 17,
-        "y": 58
+        "y": 59
       },
       "id": 7,
       "options": {
@@ -1667,7 +1655,7 @@
         "h": 12,
         "w": 8,
         "x": 0,
-        "y": 70
+        "y": 71
       },
       "id": 51,
       "options": {
@@ -1729,7 +1717,7 @@
         "h": 12,
         "w": 5,
         "x": 8,
-        "y": 70
+        "y": 71
       },
       "id": 50,
       "options": {
@@ -1795,7 +1783,7 @@
         "h": 12,
         "w": 4,
         "x": 13,
-        "y": 70
+        "y": 71
       },
       "id": 5,
       "options": {
@@ -1857,7 +1845,7 @@
         "h": 12,
         "w": 7,
         "x": 17,
-        "y": 70
+        "y": 71
       },
       "id": 3,
       "options": {
@@ -1941,7 +1929,7 @@
         "h": 11,
         "w": 12,
         "x": 0,
-        "y": 82
+        "y": 83
       },
       "id": 67,
       "options": {
@@ -1990,7 +1978,7 @@
         "h": 11,
         "w": 12,
         "x": 12,
-        "y": 82
+        "y": 83
       },
       "id": 8,
       "options": {
@@ -2088,7 +2076,7 @@
         "h": 12,
         "w": 12,
         "x": 0,
-        "y": 93
+        "y": 94
       },
       "id": 46,
       "options": {
@@ -2188,7 +2176,7 @@
         "h": 12,
         "w": 12,
         "x": 12,
-        "y": 93
+        "y": 94
       },
       "id": 47,
       "options": {
@@ -2218,414 +2206,415 @@
       "type": "timeseries"
     },
     {
-      "collapsed": false,
+      "collapsed": true,
       "gridPos": {
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 105
+        "y": 106
       },
       "id": 21,
-      "panels": [],
+      "panels": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "barWidthFactor": 0.6,
+                "drawStyle": "line",
+                "fillOpacity": 0,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "auto",
+                "showValues": false,
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": 0
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              },
+              "unit": "bytes"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 0,
+            "y": 130
+          },
+          "id": 27,
+          "options": {
+            "legend": {
+              "calcs": [],
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "hideZeros": false,
+              "mode": "single",
+              "sort": "none"
+            }
+          },
+          "pluginVersion": "12.4.2",
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "editorMode": "code",
+              "expr": "sum(rate(tempo_ingester_bytes_received_total[$__rate_interval]))",
+              "instant": false,
+              "legendFormat": "rx",
+              "range": true,
+              "refId": "B"
+            }
+          ],
+          "title": "Ingester Bytes in",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "thresholds"
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": 0
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              },
+              "unit": "Traces"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 12,
+            "y": 130
+          },
+          "id": 29,
+          "options": {
+            "colorMode": "value",
+            "graphMode": "area",
+            "justifyMode": "auto",
+            "orientation": "auto",
+            "percentChangeColorMode": "standard",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "showPercentChange": false,
+            "textMode": "auto",
+            "wideLayout": true
+          },
+          "pluginVersion": "12.4.2",
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "editorMode": "code",
+              "expr": "tempo_ingester_live_traces",
+              "instant": false,
+              "legendFormat": "rx",
+              "range": true,
+              "refId": "B"
+            }
+          ],
+          "title": "Live Traces",
+          "type": "stat"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "barWidthFactor": 0.6,
+                "drawStyle": "line",
+                "fillOpacity": 0,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "auto",
+                "showValues": false,
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": 0
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              },
+              "unit": "reqps"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 0,
+            "y": 138
+          },
+          "id": 28,
+          "options": {
+            "legend": {
+              "calcs": [],
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "hideZeros": false,
+              "mode": "single",
+              "sort": "none"
+            }
+          },
+          "pluginVersion": "12.4.2",
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "editorMode": "code",
+              "expr": "sum(rate(tempo_distributor_spans_received_total[$__rate_interval]))",
+              "instant": false,
+              "legendFormat": "rx",
+              "range": true,
+              "refId": "B"
+            }
+          ],
+          "title": "Ingester spans in",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "thresholds"
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": 0
+                  }
+                ]
+              },
+              "unit": "spans"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 6,
+            "x": 12,
+            "y": 138
+          },
+          "id": 31,
+          "options": {
+            "colorMode": "value",
+            "graphMode": "area",
+            "justifyMode": "center",
+            "orientation": "auto",
+            "percentChangeColorMode": "standard",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "showPercentChange": false,
+            "textMode": "auto",
+            "wideLayout": true
+          },
+          "pluginVersion": "12.4.2",
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "editorMode": "code",
+              "expr": "sum(increase(tempo_distributor_spans_received_total[$__range]))",
+              "instant": false,
+              "legendFormat": "rx",
+              "range": true,
+              "refId": "B"
+            }
+          ],
+          "title": "Spans total",
+          "type": "stat"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "thresholds"
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": 0
+                  }
+                ]
+              },
+              "unit": "bytes"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 6,
+            "x": 18,
+            "y": 138
+          },
+          "id": 30,
+          "options": {
+            "colorMode": "value",
+            "graphMode": "area",
+            "justifyMode": "auto",
+            "orientation": "auto",
+            "percentChangeColorMode": "standard",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "showPercentChange": false,
+            "textMode": "auto",
+            "wideLayout": true
+          },
+          "pluginVersion": "12.4.2",
+          "targets": [
+            {
+              "editorMode": "code",
+              "expr": "sum(increase(tempo_ingester_bytes_received_total[$__range]))",
+              "legendFormat": "__auto",
+              "range": true,
+              "refId": "A"
+            }
+          ],
+          "title": "Bytes total",
+          "type": "stat"
+        }
+      ],
       "title": "Tempo",
       "type": "row"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "barWidthFactor": 0.6,
-            "drawStyle": "line",
-            "fillOpacity": 0,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "auto",
-            "showValues": false,
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": 0
-              },
-              {
-                "color": "red",
-                "value": 80
-              }
-            ]
-          },
-          "unit": "bytes"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 0,
-        "y": 106
-      },
-      "id": 27,
-      "options": {
-        "legend": {
-          "calcs": [],
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "hideZeros": false,
-          "mode": "single",
-          "sort": "none"
-        }
-      },
-      "pluginVersion": "12.4.2",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "editorMode": "code",
-          "expr": "sum(rate(tempo_ingester_bytes_received_total[$__rate_interval]))",
-          "instant": false,
-          "legendFormat": "rx",
-          "range": true,
-          "refId": "B"
-        }
-      ],
-      "title": "Ingester Bytes in",
-      "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": 0
-              },
-              {
-                "color": "red",
-                "value": 80
-              }
-            ]
-          },
-          "unit": "Traces"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 12,
-        "y": 106
-      },
-      "id": 29,
-      "options": {
-        "colorMode": "value",
-        "graphMode": "area",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "percentChangeColorMode": "standard",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "showPercentChange": false,
-        "textMode": "auto",
-        "wideLayout": true
-      },
-      "pluginVersion": "12.4.2",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "editorMode": "code",
-          "expr": "tempo_ingester_live_traces",
-          "instant": false,
-          "legendFormat": "rx",
-          "range": true,
-          "refId": "B"
-        }
-      ],
-      "title": "Live Traces",
-      "type": "stat"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "barWidthFactor": 0.6,
-            "drawStyle": "line",
-            "fillOpacity": 0,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "auto",
-            "showValues": false,
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": 0
-              },
-              {
-                "color": "red",
-                "value": 80
-              }
-            ]
-          },
-          "unit": "reqps"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 0,
-        "y": 114
-      },
-      "id": 28,
-      "options": {
-        "legend": {
-          "calcs": [],
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "hideZeros": false,
-          "mode": "single",
-          "sort": "none"
-        }
-      },
-      "pluginVersion": "12.4.2",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "editorMode": "code",
-          "expr": "sum(rate(tempo_distributor_spans_received_total[$__rate_interval]))",
-          "instant": false,
-          "legendFormat": "rx",
-          "range": true,
-          "refId": "B"
-        }
-      ],
-      "title": "Ingester spans in",
-      "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": 0
-              }
-            ]
-          },
-          "unit": "spans"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 6,
-        "x": 12,
-        "y": 114
-      },
-      "id": 31,
-      "options": {
-        "colorMode": "value",
-        "graphMode": "area",
-        "justifyMode": "center",
-        "orientation": "auto",
-        "percentChangeColorMode": "standard",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "showPercentChange": false,
-        "textMode": "auto",
-        "wideLayout": true
-      },
-      "pluginVersion": "12.4.2",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "editorMode": "code",
-          "expr": "sum(increase(tempo_distributor_spans_received_total[$__range]))",
-          "instant": false,
-          "legendFormat": "rx",
-          "range": true,
-          "refId": "B"
-        }
-      ],
-      "title": "Spans total",
-      "type": "stat"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": 0
-              }
-            ]
-          },
-          "unit": "bytes"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 6,
-        "x": 18,
-        "y": 114
-      },
-      "id": 30,
-      "options": {
-        "colorMode": "value",
-        "graphMode": "area",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "percentChangeColorMode": "standard",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "showPercentChange": false,
-        "textMode": "auto",
-        "wideLayout": true
-      },
-      "pluginVersion": "12.4.2",
-      "targets": [
-        {
-          "editorMode": "code",
-          "expr": "sum(increase(tempo_ingester_bytes_received_total[$__range]))",
-          "legendFormat": "__auto",
-          "range": true,
-          "refId": "A"
-        }
-      ],
-      "title": "Bytes total",
-      "type": "stat"
     },
     {
       "collapsed": true,
@@ -2633,7 +2622,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 122
+        "y": 107
       },
       "id": 20,
       "panels": [
@@ -2703,7 +2692,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 139
+            "y": 255
           },
           "id": 22,
           "options": {
@@ -2798,7 +2787,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 139
+            "y": 255
           },
           "id": 24,
           "options": {
@@ -2893,7 +2882,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 147
+            "y": 263
           },
           "id": 23,
           "options": {
@@ -2950,7 +2939,7 @@
             "h": 8,
             "w": 6,
             "x": 12,
-            "y": 147
+            "y": 263
           },
           "id": 25,
           "options": {
@@ -3011,7 +3000,7 @@
             "h": 8,
             "w": 6,
             "x": 18,
-            "y": 147
+            "y": 263
           },
           "id": 26,
           "options": {
@@ -3054,7 +3043,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 123
+        "y": 108
       },
       "id": 15,
       "panels": [
@@ -3124,7 +3113,7 @@
             "h": 9,
             "w": 8,
             "x": 0,
-            "y": 140
+            "y": 256
           },
           "id": 16,
           "options": {
@@ -3186,7 +3175,7 @@
             "h": 9,
             "w": 5,
             "x": 8,
-            "y": 140
+            "y": 256
           },
           "id": 17,
           "options": {
@@ -3285,7 +3274,7 @@
             "h": 9,
             "w": 6,
             "x": 13,
-            "y": 140
+            "y": 256
           },
           "id": 19,
           "options": {
@@ -3376,7 +3365,7 @@
             "h": 9,
             "w": 5,
             "x": 19,
-            "y": 140
+            "y": 256
           },
           "id": 18,
           "interval": "15s",
@@ -3416,7 +3405,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 124
+        "y": 109
       },
       "id": 41,
       "panels": [
@@ -3486,7 +3475,7 @@
             "h": 10,
             "w": 9,
             "x": 0,
-            "y": 141
+            "y": 257
           },
           "id": 45,
           "options": {
@@ -3607,7 +3596,7 @@
             "h": 10,
             "w": 5,
             "x": 9,
-            "y": 141
+            "y": 257
           },
           "id": 42,
           "options": {
@@ -3704,7 +3693,7 @@
             "h": 10,
             "w": 5,
             "x": 14,
-            "y": 141
+            "y": 257
           },
           "id": 43,
           "options": {
@@ -3824,7 +3813,7 @@
             "h": 10,
             "w": 5,
             "x": 19,
-            "y": 141
+            "y": 257
           },
           "id": 44,
           "options": {
@@ -3887,7 +3876,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 125
+        "y": 110
       },
       "id": 11,
       "panels": [
@@ -3957,7 +3946,7 @@
             "h": 8,
             "w": 6,
             "x": 0,
-            "y": 142
+            "y": 258
           },
           "id": 10,
           "options": {
@@ -4053,7 +4042,7 @@
             "h": 8,
             "w": 6,
             "x": 6,
-            "y": 142
+            "y": 258
           },
           "id": 12,
           "options": {
@@ -4179,7 +4168,7 @@
             "h": 8,
             "w": 5,
             "x": 12,
-            "y": 142
+            "y": 258
           },
           "id": 13,
           "options": {
@@ -4257,7 +4246,7 @@
             "h": 8,
             "w": 7,
             "x": 17,
-            "y": 142
+            "y": 258
           },
           "id": 14,
           "options": {
@@ -4305,13 +4294,13 @@
     "list": []
   },
   "time": {
-    "from": "now-1h",
+    "from": "now-3h",
     "to": "now"
   },
   "timepicker": {},
   "timezone": "browser",
   "title": "Development Dashboard",
   "uid": "gwzp7h",
-  "version": 2,
+  "version": 1,
   "weekStart": ""
 }

@@ -10,6 +10,7 @@ _GIT_TAG  := $(shell git tag --points-at HEAD | tr '\n' ' ' | xargs -r semver 2>
 _GIT_SHA  := $(shell git rev-parse --short HEAD)
 IMAGE_TAG ?= $(if $(_GIT_TAG),$(_GIT_TAG),$(_GIT_SHA))
 DIST_DIR ?= ./dist
+ARCH ?= amd64
 ACT_IMAGE ?= ghcr.io/catthehacker/ubuntu:act-latest
 ACT_WORKFLOW ?= ./.github/workflows/ci.yml
 ACT_EVENT ?= pull_request
@@ -546,18 +547,66 @@ integration-act: integration-build-k6 build-container dev-up-lgtm
 				up --abort-on-container-exit --exit-code-from k6 k6 ; \
 	}
 
-# @ name: Build Release Archives
-# @ description: Builds Linux amd64 and arm64 release zip archives in ./dist for the provided semantic version tag.
+# @ name: Build Binaries
+# @ description: Cross-compiles mcp-server and validate for the target Linux architecture and writes them to ./dist. Used by CI to produce per-arch artifacts before packaging.
 # @ risk: low
 # @ read-only: false
 # @ destructive: false
 # @ idempotent: true
 # @ open-world: false
-# @ param: VERSION string | Semantic version tag to package, for example v1.2.3
-# @ output: Release zip archives written to ./dist
-# @ output-type: text/plain
-.PHONY: build-release-archives
-build-release-archives:
+# @ param: ARCH string | Target architecture: amd64 or arm64 (default: amd64)
+# @ output: Binaries written to ./dist/mcp-server_linux_ARCH and ./dist/validate_linux_ARCH
+# @ output-type: application/octet-stream
+.PHONY: build-binaries
+build-binaries:
+	@{ \
+		set -e ; \
+		mkdir -p "$(DIST_DIR)" ; \
+		CGO_ENABLED="0" GOOS="linux" GOARCH="$(ARCH)" go build -o "$(DIST_DIR)/mcp-server_linux_$(ARCH)" ./cmd/mcp-server ; \
+		CGO_ENABLED="0" GOOS="linux" GOARCH="$(ARCH)" go build -o "$(DIST_DIR)/validate_linux_$(ARCH)" ./cmd/validate ; \
+		printf 'built %s %s\n' "$(ARCH)" "$$(ls -1 "$(DIST_DIR)"/*_linux_$(ARCH))" ; \
+	}
+
+# @ name: Build Container Tar
+# @ description: Builds the make-mcp container image for a single Linux architecture using docker buildx and saves it as a tar to ./dist. Requires a docker-container buildx builder (set up by docker/setup-buildx-action in CI). OTEL_TEST_ENDPOINT is passed as a build arg to capture build-time telemetry.
+# @ risk: low
+# @ read-only: false
+# @ destructive: false
+# @ idempotent: true
+# @ open-world: true
+# @ param: ARCH string | Target architecture: amd64 or arm64 (default: amd64)
+# @ param: IMAGE_TAG string | Image tag to apply (default: git tag or short SHA)
+# @ param: OTEL_TEST_ENDPOINT string | OTLP endpoint for build-time telemetry (default: http://localhost:4317)
+# @ output: Container image tar at ./dist/make-mcp_IMAGE_TAG_linux_ARCH.tar
+# @ output-type: application/octet-stream
+.PHONY: build-container-tar
+build-container-tar:
+	@{ \
+		set -e ; \
+		mkdir -p "$(DIST_DIR)" ; \
+		docker buildx build \
+			--platform "linux/$(ARCH)" \
+			--provenance=false \
+			--output "type=docker,dest=$(DIST_DIR)/make-mcp_$(IMAGE_TAG)_linux_$(ARCH).tar" \
+			--build-arg "OTEL_EXPORTER_OTLP_ENDPOINT=$(OTEL_TEST_ENDPOINT)" \
+			-t "$(IMAGE_NAME):$(IMAGE_TAG)" \
+			. ; \
+		printf 'saved %s\n' "$(DIST_DIR)/make-mcp_$(IMAGE_TAG)_linux_$(ARCH).tar" ; \
+	}
+
+# @ name: Package Release Archive
+# @ description: Packages pre-built mcp-server and validate binaries from ./dist together with README.md and make-mcp.yml into a .tar.gz release archive for the given version and architecture. Run build-binaries first to produce the binaries.
+# @ risk: low
+# @ read-only: false
+# @ destructive: false
+# @ idempotent: true
+# @ open-world: false
+# @ param: VERSION string | Semantic version tag, for example v1.2.3
+# @ param: ARCH string | Target architecture: amd64 or arm64 (default: amd64)
+# @ output: Release archive at ./dist/make-mcp_VERSION_linux_ARCH.tar.gz
+# @ output-type: application/octet-stream
+.PHONY: package-release-archive
+package-release-archive:
 	@{ \
 		set -e ; \
 		if [ -z "$(VERSION)" ]; then \
@@ -567,15 +616,56 @@ build-release-archives:
 		mkdir -p "$(DIST_DIR)" ; \
 		tmpdir="$$(mktemp -d)" ; \
 		trap 'rm -rf "$$tmpdir"' EXIT ; \
-		for arch in "amd64" "arm64"; do \
-			stage_dir="$$tmpdir/make-mcp_$(VERSION)_linux_$$arch" ; \
-			mkdir -p "$$stage_dir" ; \
-			CGO_ENABLED="0" GOOS="linux" GOARCH="$$arch" go build -o "$$stage_dir/mcp-server" ./cmd/mcp-server ; \
-			cp "./README.md" "$$stage_dir/README.md" ; \
-			cp "./make-mcp.yml" "$$stage_dir/make-mcp.yml" ; \
-			( cd "$$tmpdir" && zip -qr "$(CURDIR)/$(DIST_DIR)/make-mcp_$(VERSION)_linux_$$arch.zip" "make-mcp_$(VERSION)_linux_$$arch" ) ; \
-		done ; \
-		ls -1 "$(DIST_DIR)"/*.zip ; \
+		stage="$$tmpdir/make-mcp_$(VERSION)_linux_$(ARCH)" ; \
+		mkdir -p "$$stage" ; \
+		cp "$(DIST_DIR)/mcp-server_linux_$(ARCH)" "$$stage/mcp-server" ; \
+		cp "$(DIST_DIR)/validate_linux_$(ARCH)" "$$stage/validate" ; \
+		cp README.md "$$stage/README.md" ; \
+		cp make-mcp.yml "$$stage/make-mcp.yml" ; \
+		tar -czf "$(DIST_DIR)/make-mcp_$(VERSION)_linux_$(ARCH).tar.gz" \
+			-C "$$tmpdir" "make-mcp_$(VERSION)_linux_$(ARCH)" ; \
+		printf '%s\n' "$(DIST_DIR)/make-mcp_$(VERSION)_linux_$(ARCH).tar.gz" ; \
+	}
+
+# @ name: Build Release Archives
+# @ description: Builds Linux amd64 and arm64 release tar.gz archives in ./dist for the provided semantic version tag. Convenience wrapper around build-binaries and package-release-archive for both arches.
+# @ risk: low
+# @ read-only: false
+# @ destructive: false
+# @ idempotent: true
+# @ open-world: false
+# @ param: VERSION string | Semantic version tag to package, for example v1.2.3
+# @ output: Release tar.gz archives written to ./dist
+# @ output-type: application/octet-stream
+.PHONY: build-release-archives
+build-release-archives:
+	$(MAKE) build-binaries ARCH=amd64
+	$(MAKE) build-binaries ARCH=arm64
+	$(MAKE) package-release-archive ARCH=amd64 VERSION=$(VERSION)
+	$(MAKE) package-release-archive ARCH=arm64 VERSION=$(VERSION)
+
+# @ name: Integration Tests (prebuilt image)
+# @ description: Runs MCP protocol integration tests using a container image that is already loaded in the local Docker daemon. Does not build the image. Set IMAGE_NAME and IMAGE_TAG to match the loaded image, and K6_SCRIPT to select the test script.
+# @ risk: medium
+# @ read-only: true
+# @ destructive: false
+# @ idempotent: true
+# @ open-world: true
+# @ param: IMAGE_TAG string | Tag of the pre-loaded container image (default: git tag or short SHA)
+# @ param: K6_SCRIPT string | Path inside the k6 container to the test script (default: /scripts/integration.js)
+# @ output: k6 integration test results and pass/fail summary
+# @ output-type: text/plain
+.PHONY: integration-prebuilt
+integration-prebuilt: integration-build-k6
+	@{ \
+		set -e ; \
+		mkdir -p "$(DEV_DIR)/tmp" ; \
+		trap '$(_INTEGRATION_COMPOSE_ENV) docker compose $(_INTEGRATION_STACK_COMPOSE) down --remove-orphans ; rm -rf "$(DEV_DIR)/tmp"' EXIT INT TERM ; \
+		$(_INTEGRATION_COMPOSE_ENV) docker compose $(_INTEGRATION_STACK_COMPOSE) down --remove-orphans >/dev/null 2>&1 || true ; \
+		MAKE_MCP_IMAGE="$(IMAGE_NAME):$(IMAGE_TAG)" K6_IMAGE="$(K6_IMAGE)" K6_SCRIPT="$(K6_SCRIPT)" $(_SERVER_OTEL_ENV) $(_K6_OTEL_ENV) \
+			$(_INTEGRATION_COMPOSE_ENV) docker compose $(_INTEGRATION_STACK_COMPOSE) up -d --wait make-mcp-server ; \
+		MAKE_MCP_IMAGE="$(IMAGE_NAME):$(IMAGE_TAG)" K6_IMAGE="$(K6_IMAGE)" K6_SCRIPT="$(K6_SCRIPT)" $(_SERVER_OTEL_ENV) $(_K6_OTEL_ENV) \
+			$(_INTEGRATION_COMPOSE_ENV) docker compose $(_INTEGRATION_STACK_COMPOSE) up --abort-on-container-exit --exit-code-from k6 k6 ; \
 	}
 
 # @ name: Upload Discord Webhook Secret
