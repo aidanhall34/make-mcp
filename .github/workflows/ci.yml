@@ -93,9 +93,11 @@ jobs:
           STARTED_AT: ${{ steps.started.outputs.at }}
         run: ./.github/scripts/notify-discord.sh
 
-  build:
-    name: build (${{ matrix.arch }})
+  build-and-test:
+    name: build-and-test (${{ matrix.arch }})
     runs-on: ubuntu-latest
+    needs:
+      - unit-tests
     strategy:
       fail-fast: false
       matrix:
@@ -138,6 +140,8 @@ jobs:
             IMAGE_TAG="ci-${{ github.sha }}" \
             OTEL_TEST_ENDPOINT="${OTEL_EXPORTER_OTLP_ENDPOINT}"
 
+      # Artifacts are uploaded before integration tests so they are available
+      # to downstream jobs even if a test fails.
       - name: Upload binaries artifact
         uses: actions/upload-artifact@v4
         with:
@@ -154,7 +158,7 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
-      - name: Notify Discord
+      - name: Notify Discord - build
         if: always()
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
@@ -164,56 +168,13 @@ jobs:
           STARTED_AT: ${{ steps.started.outputs.at }}
         run: ./.github/scripts/notify-discord.sh
 
-  integration:
-    name: integration (${{ matrix.arch }}, ${{ matrix.test_name }})
-    runs-on: ubuntu-latest
-    needs:
-      - unit-tests
-      - build
-    strategy:
-      fail-fast: false
-      matrix:
-        arch: [amd64, arm64]
-        test_name: [tools-list, tools-call-hello-world]
-        include:
-          - test_name: tools-list
-            script: tools-list.js
-          - test_name: tools-call-hello-world
-            script: tools-call-hello-world.js
-    steps:
-      - name: Record start time
-        id: started
+      - name: Record integration start time
+        id: integration-started
         run: echo "at=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
-
-      - name: Check out repository
-        uses: actions/checkout@v4
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
-
-      - name: Download container tar
-        uses: actions/download-artifact@v4
-        with:
-          name: container-${{ matrix.arch }}
-          path: dist/
 
       - name: Load container image
         run: |
           docker load -i dist/make-mcp_ci-${{ github.sha }}_linux_${{ matrix.arch }}.tar
-          docker tag \
-            ghcr.io/${{ github.repository_owner }}/make-mcp:ci-${{ github.sha }} \
-            ghcr.io/${{ github.repository_owner }}/make-mcp:ci-${{ github.sha }}-${{ matrix.arch }}
-
-      - name: Configure telemetry for ACT
-        if: env.ACT == 'true'
-        run: |
-          echo "OTEL_EXPORTER_OTLP_ENDPOINT=${ACT_OTEL_EXPORTER_OTLP_ENDPOINT:-http://host.docker.internal:4317}" >> "$GITHUB_ENV"
-          echo "OTEL_EXPORTER_OTLP_INSECURE=true" >> "$GITHUB_ENV"
-          echo "OTEL_TRACES_EXPORTER=otlp" >> "$GITHUB_ENV"
-          echo "OTEL_METRICS_EXPORTER=otlp" >> "$GITHUB_ENV"
-          echo "K6_OUT=experimental-opentelemetry" >> "$GITHUB_ENV"
-          echo "K6_OTEL_GRPC_EXPORTER_ENDPOINT=${ACT_OTEL_EXPORTER_OTLP_ENDPOINT:-host.docker.internal:4317}" >> "$GITHUB_ENV"
-          echo "K6_OTEL_GRPC_EXPORTER_INSECURE=true" >> "$GITHUB_ENV"
 
       - name: Configure k6 OTLP
         if: env.OTEL_EXPORTER_OTLP_ENDPOINT != ''
@@ -223,21 +184,41 @@ jobs:
           echo "K6_OUT=experimental-opentelemetry" >> "$GITHUB_ENV"
           echo "K6_OTEL_GRPC_EXPORTER_ENDPOINT=${grpc}" >> "$GITHUB_ENV"
           echo "K6_OTEL_GRPC_EXPORTER_INSECURE=${OTEL_EXPORTER_OTLP_INSECURE}" >> "$GITHUB_ENV"
-
-      - name: Run integration tests
+        # ACT: also set k6 OTLP vars
+      - name: Configure k6 OTLP for ACT
+        if: env.ACT == 'true'
         run: |
-          IMAGE_TAG="ci-${{ github.sha }}-${{ matrix.arch }}" \
-          K6_SCRIPT="/scripts/${{ matrix.script }}" \
-          make integration-prebuilt
+          echo "K6_OUT=experimental-opentelemetry" >> "$GITHUB_ENV"
+          echo "K6_OTEL_GRPC_EXPORTER_ENDPOINT=${ACT_OTEL_EXPORTER_OTLP_ENDPOINT:-host.docker.internal:4317}" >> "$GITHUB_ENV"
+          echo "K6_OTEL_GRPC_EXPORTER_INSECURE=true" >> "$GITHUB_ENV"
 
-      - name: Notify Discord
+      - name: Integration test - tools-list
+        id: test-tools-list
+        continue-on-error: true
+        run: IMAGE_TAG="ci-${{ github.sha }}" K6_SCRIPT="/scripts/tools-list.js" make integration-prebuilt
+
+      - name: Integration test - tools-call-hello-world
+        id: test-tools-call-hello-world
+        continue-on-error: true
+        run: IMAGE_TAG="ci-${{ github.sha }}" K6_SCRIPT="/scripts/tools-call-hello-world.js" make integration-prebuilt
+
+      - name: Fail if any integration test failed
+        if: |
+          steps.test-tools-list.outcome == 'failure' ||
+          steps.test-tools-call-hello-world.outcome == 'failure'
+        run: |
+          echo "tools-list: ${{ steps.test-tools-list.outcome }}"
+          echo "tools-call-hello-world: ${{ steps.test-tools-call-hello-world.outcome }}"
+          exit 1
+
+      - name: Notify Discord - integration
         if: always()
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
           GH_TOKEN: ${{ github.token }}
-          JOB_NAME: "integration (${{ matrix.arch }}, ${{ matrix.test_name }})"
+          JOB_NAME: "integration (${{ matrix.arch }})"
           JOB_STATUS: ${{ job.status }}
-          STARTED_AT: ${{ steps.started.outputs.at }}
+          STARTED_AT: ${{ steps.integration-started.outputs.at }}
         run: ./.github/scripts/notify-discord.sh
 
   release:
@@ -246,8 +227,7 @@ jobs:
     needs:
       - lint
       - unit-tests
-      - build
-      - integration
+      - build-and-test
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     permissions:
       contents: write
@@ -313,7 +293,7 @@ jobs:
     runs-on: ubuntu-latest
     needs:
       - release
-      - build
+      - build-and-test
     if: needs.release.outputs.released == 'true'
     strategy:
       fail-fast: false
@@ -365,7 +345,7 @@ jobs:
     runs-on: ubuntu-latest
     needs:
       - release
-      - build
+      - build-and-test
     if: needs.release.outputs.released == 'true'
     permissions:
       contents: read
