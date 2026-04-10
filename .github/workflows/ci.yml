@@ -1,7 +1,6 @@
 name: CI
 
 on:
-  pull_request:
   push:
 
 # OTLP telemetry is forwarded to the configured collector from every job.
