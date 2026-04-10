@@ -1,0 +1,22 @@
+---
+services:
+  mcp-grafana:
+    image: grafana/mcp-grafana:latest
+    restart: unless-stopped
+    depends_on:
+      make-mcp-lgtm:
+        condition: service_healthy
+    command: ["-transport", "streamable-http", "-address", "0.0.0.0:8000", "-metrics", "-metrics-address", ":8001"]
+    ports:
+      - "8000:8000"
+      - "8001:8001"
+    environment:
+      OTEL_EXPORTER_OTLP_ENDPOINT: "http://make-mcp-lgtm:4317"
+      OTEL_EXPORTER_OTLP_INSECURE: "true"
+      GRAFANA_URL: http://make-mcp-lgtm:3000
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c '</dev/tcp/localhost/8000'"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s

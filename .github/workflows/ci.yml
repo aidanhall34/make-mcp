@@ -1,0 +1,359 @@
+name: CI
+
+on:
+  pull_request:
+    branches:
+      - "main"
+  push:
+    branches:
+      - "main"
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    name: lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Record start time
+        id: started
+        run: echo "at=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
+
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - name: Install Node dependencies
+        run: npm ci
+
+      - name: Run lint and validation
+        run: make lint
+
+      - name: Notify Discord
+        if: always()
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          GH_TOKEN: ${{ github.token }}
+          JOB_NAME: "lint"
+          JOB_STATUS: ${{ job.status }}
+          STARTED_AT: ${{ steps.started.outputs.at }}
+        run: ./.github/scripts/notify-discord.sh
+
+  unit-tests:
+    name: unit-tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Record start time
+        id: started
+        run: echo "at=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
+
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Configure telemetry
+        shell: bash
+        env:
+          GH_OTEL_EXPORTER_OTLP_ENDPOINT: ${{ secrets.OTEL_EXPORTER_OTLP_ENDPOINT }}
+        run: |
+          set -euo pipefail
+          endpoint=""
+          insecure="false"
+          if [ "${ACT:-}" = "true" ]; then
+            endpoint="${ACT_OTEL_EXPORTER_OTLP_ENDPOINT:-http://host.docker.internal:4317}"
+            insecure="true"
+          elif [ -n "${GH_OTEL_EXPORTER_OTLP_ENDPOINT}" ]; then
+            endpoint="${GH_OTEL_EXPORTER_OTLP_ENDPOINT}"
+            case "${endpoint}" in
+              http://*) insecure="true" ;;
+            esac
+          fi
+          if [ -n "${endpoint}" ]; then
+            {
+              echo "OTEL_EXPORTER_OTLP_ENDPOINT=${endpoint}"
+            } >> "$GITHUB_ENV"
+          else
+            {
+              echo "OTEL_EXPORTER_OTLP_ENDPOINT="
+              echo "OTEL_TRACES_EXPORTER=none"
+              echo "OTEL_METRICS_EXPORTER=none"
+            } >> "$GITHUB_ENV"
+          fi
+
+      - name: Run unit tests
+        run: make tests
+
+      - name: Notify Discord
+        if: always()
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          GH_TOKEN: ${{ github.token }}
+          JOB_NAME: "unit-tests"
+          JOB_STATUS: ${{ job.status }}
+          STARTED_AT: ${{ steps.started.outputs.at }}
+        run: ./.github/scripts/notify-discord.sh
+
+  integration:
+    name: integration (${{ matrix.test_name }})
+    runs-on: ubuntu-latest
+    needs:
+      - unit-tests
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - test_name: "tools-list"
+            script: "tools-list.js"
+          - test_name: "tools-call-hello-world"
+            script: "tools-call-hello-world.js"
+    steps:
+      - name: Record start time
+        id: started
+        run: echo "at=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
+
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Configure telemetry
+        shell: bash
+        env:
+          GH_OTEL_EXPORTER_OTLP_ENDPOINT: ${{ secrets.OTEL_EXPORTER_OTLP_ENDPOINT }}
+        run: |
+          set -euo pipefail
+          endpoint=""
+          insecure="false"
+          integration_target="integration"
+          if [ "${ACT:-}" = "true" ]; then
+            endpoint="${ACT_OTEL_EXPORTER_OTLP_ENDPOINT:-http://host.docker.internal:4317}"
+            insecure="true"
+            integration_target="integration-act"
+          elif [ -n "${GH_OTEL_EXPORTER_OTLP_ENDPOINT}" ]; then
+            endpoint="${GH_OTEL_EXPORTER_OTLP_ENDPOINT}"
+            integration_target="integration-otel"
+            case "${endpoint}" in
+              http://*) insecure="true" ;;
+            esac
+          fi
+          if [ -n "${endpoint}" ]; then
+            grpc_endpoint="${endpoint#http://}"
+            grpc_endpoint="${grpc_endpoint#https://}"
+            {
+              echo "INTEGRATION_MAKE_TARGET=${integration_target}"
+              echo "OTEL_EXPORTER_OTLP_ENDPOINT=${endpoint}"
+              echo "OTEL_EXPORTER_OTLP_INSECURE=${insecure}"
+              echo "OTEL_TRACES_EXPORTER=otlp"
+              echo "OTEL_METRICS_EXPORTER=otlp"
+              echo "K6_OUT=experimental-opentelemetry"
+              echo "K6_OTEL_GRPC_EXPORTER_ENDPOINT=${grpc_endpoint}"
+              echo "K6_OTEL_GRPC_EXPORTER_INSECURE=${insecure}"
+              echo "BUILD_OTEL_EXPORTER_OTLP_ENDPOINT=${endpoint}"
+            } >> "$GITHUB_ENV"
+          else
+            {
+              echo "INTEGRATION_MAKE_TARGET=integration"
+              echo "OTEL_EXPORTER_OTLP_ENDPOINT="
+              echo "OTEL_EXPORTER_OTLP_INSECURE=false"
+              echo "OTEL_TRACES_EXPORTER=none"
+              echo "OTEL_METRICS_EXPORTER=none"
+              echo "K6_OUT="
+              echo "K6_OTEL_GRPC_EXPORTER_ENDPOINT="
+              echo "K6_OTEL_GRPC_EXPORTER_INSECURE=false"
+              echo "BUILD_OTEL_EXPORTER_OTLP_ENDPOINT="
+            } >> "$GITHUB_ENV"
+          fi
+
+      - name: Run integration tests
+        run: |
+          IMAGE_TAG="ci-${GITHUB_SHA}" \
+          K6_SCRIPT="/scripts/${{ matrix.script }}" \
+          OTEL_TEST_ENDPOINT="${BUILD_OTEL_EXPORTER_OTLP_ENDPOINT}" \
+          make "${INTEGRATION_MAKE_TARGET}"
+
+      - name: Notify Discord
+        if: always()
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          GH_TOKEN: ${{ github.token }}
+          JOB_NAME: integration (${{ matrix.test_name }})
+          JOB_STATUS: ${{ job.status }}
+          STARTED_AT: ${{ steps.started.outputs.at }}
+        run: ./.github/scripts/notify-discord.sh
+
+  release:
+    name: semantic-release
+    runs-on: ubuntu-latest
+    needs:
+      - lint
+      - unit-tests
+      - integration
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+    outputs:
+      released: ${{ steps.version.outputs.released }}
+      git_tag: ${{ steps.version.outputs.git_tag }}
+    steps:
+      - name: Record start time
+        id: started
+        run: echo "at=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
+
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - name: Install semantic-release
+        run: |
+          npm install --no-save \
+            semantic-release \
+            @semantic-release/commit-analyzer \
+            @semantic-release/release-notes-generator \
+            @semantic-release/github \
+            conventional-changelog-conventionalcommits
+
+      - name: Create semantic version tag and GitHub release
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: npx semantic-release
+
+      - name: Detect created tag
+        id: version
+        run: |
+          git_tag="$(git tag --points-at "${GITHUB_SHA}" | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n 1 || true)"
+          if [ -n "${git_tag}" ]; then
+            echo "released=true" >> "$GITHUB_OUTPUT"
+            echo "git_tag=${git_tag}" >> "$GITHUB_OUTPUT"
+          else
+            echo "released=false" >> "$GITHUB_OUTPUT"
+            echo "git_tag=" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Notify Discord
+        if: always()
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          GH_TOKEN: ${{ github.token }}
+          JOB_NAME: "semantic-release"
+          JOB_STATUS: ${{ job.status }}
+          STARTED_AT: ${{ steps.started.outputs.at }}
+        run: ./.github/scripts/notify-discord.sh
+
+  publish-release-archives:
+    name: publish-release-archives
+    runs-on: ubuntu-latest
+    needs:
+      - release
+    if: needs.release.outputs.released == 'true'
+    permissions:
+      contents: write
+    steps:
+      - name: Record start time
+        id: started
+        run: echo "at=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
+
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Build release archives
+        run: make build-release-archives VERSION="${{ needs.release.outputs.git_tag }}"
+
+      - name: Upload release archives
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "${{ needs.release.outputs.git_tag }}" ./dist/*.zip --clobber
+
+      - name: Notify Discord
+        if: always()
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          GH_TOKEN: ${{ github.token }}
+          JOB_NAME: "publish-release-archives"
+          JOB_STATUS: ${{ job.status }}
+          STARTED_AT: ${{ steps.started.outputs.at }}
+        run: ./.github/scripts/notify-discord.sh
+
+  publish-container:
+    name: publish-container
+    runs-on: ubuntu-latest
+    needs:
+      - release
+    if: needs.release.outputs.released == 'true'
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Record start time
+        id: started
+        run: echo "at=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
+
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
+      - name: Publish multi-arch image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          build-args: |
+            OTEL_EXPORTER_OTLP_ENDPOINT=${{ secrets.OTEL_EXPORTER_OTLP_ENDPOINT }}
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/make-mcp:${{ needs.release.outputs.git_tag }}
+            ghcr.io/${{ github.repository_owner }}/make-mcp:latest
+
+      - name: Notify Discord
+        if: always()
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          GH_TOKEN: ${{ github.token }}
+          JOB_NAME: "publish-container"
+          JOB_STATUS: ${{ job.status }}
+          STARTED_AT: ${{ steps.started.outputs.at }}
+        run: ./.github/scripts/notify-discord.sh

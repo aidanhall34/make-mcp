@@ -1,19 +1,20 @@
 package runner_test
 
 import (
-	"context"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/aidanhall34/make-mcp/internal/testtel"
 	"github.com/aidanhall34/make-mcp/pkg/parser"
 	"github.com/aidanhall34/make-mcp/pkg/runner"
 )
 
 func TestRunSuccess(t *testing.T) {
-	result, err := runner.Run(context.Background(), runner.Request{
+	ctx := testtel.Start(t)
+	result, err := runner.Run(ctx, runner.Request{
 		Recipe: parser.Recipe{
 			SourceFile: makeTempMakefile(t, `
 hello:
@@ -37,7 +38,8 @@ hello:
 }
 
 func TestRunRejectsUnknownParam(t *testing.T) {
-	_, err := runner.Run(context.Background(), runner.Request{
+	ctx := testtel.Start(t)
+	_, err := runner.Run(ctx, runner.Request{
 		Recipe: parser.Recipe{
 			SourceFile: makeTempMakefile(t, "hello:\n\t@true\n"),
 			ID:         "hello",
@@ -57,7 +59,8 @@ func TestRunRejectsUnknownParam(t *testing.T) {
 }
 
 func TestRunExitNonZero(t *testing.T) {
-	_, err := runner.Run(context.Background(), runner.Request{
+	ctx := testtel.Start(t)
+	_, err := runner.Run(ctx, runner.Request{
 		Recipe: parser.Recipe{
 			SourceFile: makeTempMakefile(t, `
 fail:
@@ -92,7 +95,8 @@ fail:
 }
 
 func TestRunTimeout(t *testing.T) {
-	_, err := runner.Run(context.Background(), runner.Request{
+	ctx := testtel.Start(t)
+	_, err := runner.Run(ctx, runner.Request{
 		Recipe: parser.Recipe{
 			SourceFile: makeTempMakefile(t, `
 slow:
@@ -116,6 +120,7 @@ slow:
 }
 
 func TestRunCommandInjectionContract(t *testing.T) {
+	ctx := testtel.Start(t)
 	dir := t.TempDir()
 	logPath := filepath.Join(dir, "args.log")
 	makePath := filepath.Join(dir, "make")
@@ -126,7 +131,7 @@ func TestRunCommandInjectionContract(t *testing.T) {
 		t.Fatalf("write fake make: %v", err)
 	}
 
-	_, err := runner.Run(context.Background(), runner.Request{
+	_, err := runner.Run(ctx, runner.Request{
 		Recipe: parser.Recipe{
 			ID: "greet",
 			Params: []parser.Param{
@@ -173,6 +178,53 @@ func expectRunnerError(t *testing.T, err error) *runner.Error {
 		t.Fatalf("error type = %T, want *runner.Error", err)
 	}
 	return runnerErr
+}
+
+func TestRunEmptyRecipeID(t *testing.T) {
+	ctx := testtel.Start(t)
+	_, err := runner.Run(ctx, runner.Request{
+		Recipe: parser.Recipe{},
+	})
+	if err == nil {
+		t.Fatal("expected error for empty recipe ID, got nil")
+	}
+	runnerErr := expectRunnerError(t, err)
+	if runnerErr.Code != runner.ErrorCodeInvalidParams {
+		t.Fatalf("error code = %q, want %q", runnerErr.Code, runner.ErrorCodeInvalidParams)
+	}
+}
+
+func TestRunDefaultTimeout(t *testing.T) {
+	ctx := testtel.Start(t)
+	result, err := runner.Run(ctx, runner.Request{
+		Recipe: parser.Recipe{
+			SourceFile: makeTempMakefile(t, "hello:\n\t@printf 'hi\\n'\n"),
+			ID:         "hello",
+			Params:     []parser.Param{},
+		},
+		// Timeout: 0 → uses default 10-minute timeout
+	})
+	if err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+	if result.Stdout != "hi\n" {
+		t.Errorf("stdout = %q, want %q", result.Stdout, "hi\n")
+	}
+}
+
+func TestRunMakeNotFound(t *testing.T) {
+	ctx := testtel.Start(t)
+	_, err := runner.Run(ctx, runner.Request{
+		Recipe:   parser.Recipe{ID: "hello"},
+		MakePath: "/nonexistent/make-binary-xyz",
+	})
+	if err == nil {
+		t.Fatal("expected error for nonexistent make binary, got nil")
+	}
+	// Should NOT be a runner.Error — it's a lower-level exec error.
+	if _, ok := err.(*runner.Error); ok {
+		t.Fatal("expected non-runner.Error for missing binary, got *runner.Error")
+	}
 }
 
 func makeTempMakefile(t *testing.T, contents string) string {

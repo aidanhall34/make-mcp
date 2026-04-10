@@ -1,0 +1,16 @@
+---
+services:
+  make-mcp-server:
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      OTEL_TRACES_EXPORTER: ${OTEL_TRACES_EXPORTER:-otlp}
+      OTEL_METRICS_EXPORTER: ${OTEL_METRICS_EXPORTER:-otlp}
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://host.docker.internal:4317}
+      OTEL_EXPORTER_OTLP_INSECURE: ${OTEL_EXPORTER_OTLP_INSECURE:-true}
+      OTEL_SERVICE_NAME: ${OTEL_SERVICE_NAME:-make-mcp-integration-server}
+      OTEL_METRIC_EXPORT_INTERVAL: ${OTEL_METRIC_EXPORT_INTERVAL:-2000}
+
+  k6:
+    extra_hosts:
+      - "host.docker.internal:host-gateway"

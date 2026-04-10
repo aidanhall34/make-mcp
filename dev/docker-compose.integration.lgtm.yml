@@ -1,0 +1,34 @@
+---
+# Docker Compose overlay: routes both the MCP server and k6 OTel output to the
+# dev LGTM stack.
+#
+# Adds a host-gateway entry to each container so they can reach the otelcol
+# gRPC port (4317) published by the dev LGTM stack on the Docker host.
+# Also injects standard OTel env vars into the server so it emits traces and
+# metrics during the integration run.
+#
+# Never used standalone — always composed on top of docker-compose.integration.yml:
+#
+#   docker compose \
+#     -f dev/docker-compose.integration.yml \
+#     -f dev/docker-compose.integration.lgtm.yml \
+#     ...
+#
+# Applied automatically by `make integration-lgtm` and `make integration-otel`.
+
+services:
+  make-mcp-server:
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      OTEL_TRACES_EXPORTER: ${OTEL_TRACES_EXPORTER:-otlp}
+      OTEL_METRICS_EXPORTER: ${OTEL_METRICS_EXPORTER:-otlp}
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://host.docker.internal:4317}
+      OTEL_EXPORTER_OTLP_INSECURE: ${OTEL_EXPORTER_OTLP_INSECURE:-true}
+      OTEL_SERVICE_NAME: ${OTEL_SERVICE_NAME:-make-mcp-integration-server}
+      # Short export interval so metrics flush before the container exits.
+      OTEL_METRIC_EXPORT_INTERVAL: ${OTEL_METRIC_EXPORT_INTERVAL:-2000}
+
+  k6:
+    extra_hosts:
+      - "host.docker.internal:host-gateway"

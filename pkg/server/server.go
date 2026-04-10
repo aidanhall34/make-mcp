@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"sync"
 	"time"
@@ -34,9 +35,28 @@ type ToolServer struct {
 
 // New constructs a new ToolServer from parsed recipes.
 func New(cfg config.Config, recipes []parser.Recipe) (*ToolServer, error) {
+	// listStarts tracks the wall-clock start time for each in-flight tools/list
+	// request, keyed by the opaque request ID supplied by the mcp-go hooks.
+	var listStarts sync.Map
+
+	hooks := &mcpserver.Hooks{}
+	hooks.AddBeforeListTools(func(_ context.Context, id any, _ *mcp.ListToolsRequest) {
+		listStarts.Store(id, time.Now())
+	})
+	hooks.AddAfterListTools(func(ctx context.Context, id any, req *mcp.ListToolsRequest, result *mcp.ListToolsResult) {
+		if v, ok := listStarts.LoadAndDelete(id); ok {
+			telemetry.RecordToolsListRequest(ctx, telemetry.StatusSuccess, time.Since(v.(time.Time)))
+		}
+		if result == nil {
+			return
+		}
+		bytesIn, bytesOut := measureListBytes(req.Params.Cursor, result.Tools)
+		telemetry.RecordToolsListBytes(ctx, telemetry.StatusSuccess, bytesIn, bytesOut)
+	})
+
 	s := &ToolServer{
 		cfg:      cfg,
-		mcp:      mcpserver.NewMCPServer("make-mcp", "dev", mcpserver.WithToolCapabilities(true)),
+		mcp:      mcpserver.NewMCPServer("make-mcp", "dev", mcpserver.WithToolCapabilities(true), mcpserver.WithHooks(hooks)),
 		registry: &Registry{},
 	}
 
@@ -96,17 +116,30 @@ func (s *ToolServer) handleToolCall(ctx context.Context, request mcp.CallToolReq
 	)
 	defer span.End()
 
+	args := request.GetArguments()
+	bytesIn := int64(0)
+	if encoded, err := json.Marshal(args); err == nil {
+		bytesIn = int64(len(encoded))
+	}
+
 	start := time.Now()
 	result, err := runner.Run(callCtx, runner.Request{
 		Recipe:  recipe,
-		Args:    request.GetArguments(),
+		Args:    args,
 		Timeout: s.timeoutFor(recipe.Risk),
 	})
+	elapsed := time.Since(start)
 	status := telemetry.StatusSuccess
+	bytesOut := int64(0)
 	if err != nil {
 		status = telemetry.StatusFailure
+		if runnerErr, ok := err.(*runner.Error); ok {
+			bytesOut = int64(len(runnerErr.Stdout) + len(runnerErr.Stderr))
+		}
+	} else {
+		bytesOut = int64(len(result.Stdout) + len(result.Stderr))
 	}
-	s.recordInvocationMetrics(callCtx, recipe, status, time.Since(start))
+	s.recordInvocationMetrics(callCtx, recipe, status, elapsed, bytesIn, bytesOut)
 	if err != nil {
 		if runnerErr, ok := err.(*runner.Error); ok {
 			return nil, runnerErrorToJSONRPC(runnerErr)
@@ -122,8 +155,9 @@ func (s *ToolServer) handleToolCall(ctx context.Context, request mcp.CallToolReq
 	}, nil
 }
 
-func (s *ToolServer) recordInvocationMetrics(ctx context.Context, recipe parser.Recipe, status string, elapsed time.Duration) {
+func (s *ToolServer) recordInvocationMetrics(ctx context.Context, recipe parser.Recipe, status string, elapsed time.Duration, bytesIn, bytesOut int64) {
 	telemetry.RecordToolInvocation(ctx, recipe, status, elapsed)
+	telemetry.RecordToolInvocationBytes(ctx, recipe, status, bytesIn, bytesOut)
 }
 
 func (s *ToolServer) timeoutFor(risk parser.RiskLevel) time.Duration {
@@ -149,4 +183,14 @@ func (r *Registry) getRecipe(name string) (parser.Recipe, bool) {
 	defer r.mu.RUnlock()
 	recipe, ok := r.recipes[name]
 	return recipe, ok
+}
+
+// measureListBytes returns bytes_in (cursor length) and bytes_out (JSON-encoded
+// size of the tools slice) for a tools/list exchange.
+func measureListBytes(cursor mcp.Cursor, tools []mcp.Tool) (bytesIn, bytesOut int64) {
+	bytesIn = int64(len(cursor))
+	if encoded, err := json.Marshal(tools); err == nil {
+		bytesOut = int64(len(encoded))
+	}
+	return
 }

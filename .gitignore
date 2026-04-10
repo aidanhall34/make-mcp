@@ -2,3 +2,6 @@ bin/
 dev/logs
 GEMINI.md
 node_modules/
+coverage.out
+dev/tmp
+.act.secrets

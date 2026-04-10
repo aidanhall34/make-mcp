@@ -1,18 +1,81 @@
 SHELL=/usr/bin/env sh
 LGTM_VERSION:= 0.23.0
 DEV_DIR=./dev
+GITHUB_OWNER=aidanhall34
+IMAGE_NAME=ghcr.io/$(GITHUB_OWNER)/make-mcp
+# OTEL_TEST_ENDPOINT controls where test spans and metrics are sent during a
+# container build. Override with an empty string to disable test telemetry.
+OTEL_TEST_ENDPOINT ?= http://localhost:4317
+_GIT_TAG  := $(shell git tag --points-at HEAD | tr '\n' ' ' | xargs -r semver 2>/dev/null | head -1)
+_GIT_SHA  := $(shell git rev-parse --short HEAD)
+IMAGE_TAG ?= $(if $(_GIT_TAG),$(_GIT_TAG),$(_GIT_SHA))
+DIST_DIR ?= ./dist
+ACT_IMAGE ?= ghcr.io/catthehacker/ubuntu:act-latest
+ACT_WORKFLOW ?= ./.github/workflows/ci.yml
+ACT_EVENT ?= pull_request
+ACT_JOB ?=
+ACT_SECRET_FILE ?= ./.act.secrets
+ACT_OTEL_ENDPOINT ?= http://host.docker.internal:4317
+DEV_COMPOSE_PROJECT ?= make-mcp-dev
+_K6_SCRIPT_SLUG := $(shell printf '%s' "$(notdir $(K6_SCRIPT))" | tr '[:upper:]' '[:lower:]' | tr -cs '[:alnum:]' '-')
+INTEGRATION_COMPOSE_PROJECT ?= make-mcp-integration-$(_K6_SCRIPT_SLUG)-$(_GIT_SHA)
+K6_OUT ?= experimental-opentelemetry
+K6_OTEL_GRPC_EXPORTER_ENDPOINT ?= host.docker.internal:4317
+K6_OTEL_GRPC_EXPORTER_INSECURE ?= true
+K6_OTEL_SERVICE_NAME ?= make-mcp-integration
+OTEL_TRACES_EXPORTER ?= otlp
+OTEL_METRICS_EXPORTER ?= otlp
+OTEL_EXPORTER_OTLP_INSECURE ?= true
+OTEL_SERVICE_NAME ?= make-mcp-integration-server
+OTEL_METRIC_EXPORT_INTERVAL ?= 2000
+_DEV_LGTM_COMPOSE := -f "$(DEV_DIR)/docker-compose.lgtm.yml"
+_DEV_GRAFANA_MCP_COMPOSE := -f "$(DEV_DIR)/docker-compose.grafana-mcp.yml"
+_DEV_FULL_COMPOSE := $(_DEV_LGTM_COMPOSE) $(_DEV_GRAFANA_MCP_COMPOSE)
+_INTEGRATION_SERVER_COMPOSE := -f "$(DEV_DIR)/docker-compose.integration.server.yml"
+_INTEGRATION_RUNNER_COMPOSE := -f "$(DEV_DIR)/docker-compose.integration.runner.yml"
+_INTEGRATION_STACK_COMPOSE := $(_INTEGRATION_SERVER_COMPOSE) $(_INTEGRATION_RUNNER_COMPOSE)
+_INTEGRATION_TELEMETRY_COMPOSE := -f "$(DEV_DIR)/docker-compose.integration.telemetry-host.yml"
+_DEV_COMPOSE_ENV := COMPOSE_PROJECT_NAME="$(DEV_COMPOSE_PROJECT)"
+_INTEGRATION_COMPOSE_ENV := COMPOSE_PROJECT_NAME="$(INTEGRATION_COMPOSE_PROJECT)"
+
 # @ name: Test
-# @ description: Runs all Go unit tests with race detection enabled.
+# @ description: Runs all Go unit and benchmark tests with race detection and coverage enabled. Each package enforces its own coverage threshold via TestMain and emits per-file JSON coverage to stderr.
 # @ risk: low
 # @ read-only: true
 # @ destructive: false
 # @ idempotent: true
 # @ open-world: false
 # @ param: none
-# @ output: Test results and pass/fail summary
+# @ output: Test results, per-file coverage JSON, and pass/fail summary
 # @ output-type: text/plain
-tests:
-	go test -race ./...
+tests: unit-tests bench
+
+
+# @ name: Test
+# @ description: Runs all Go unit tests with race detection and coverage enabled. Each package enforces its own coverage threshold via TestMain and emits per-file JSON coverage to stderr.
+# @ risk: low
+# @ read-only: true
+# @ destructive: false
+# @ idempotent: true
+# @ open-world: false
+# @ param: none
+# @ output: Test results, per-file coverage JSON, and pass/fail summary
+# @ output-type: text/plain
+unit-tests:
+	go test -race -cover -coverprofile=coverage.out ./...
+
+# @ name: Benchmark
+# @ description: Runs all Go benchmark tests across every package and reports memory allocations.
+# @ risk: low
+# @ read-only: true
+# @ destructive: false
+# @ idempotent: true
+# @ open-world: false
+# @ param: none
+# @ output: Benchmark results with ns/op, B/op, and allocs/op per benchmark
+# @ output-type: text/plain
+bench:
+	go test -bench=. -benchmem -run='^$$' ./...
 
 # @ name: Format
 # @ description: Formats all Go source and test files in the cmd and pkg directories.
@@ -40,8 +103,40 @@ format:
 lint-markdown:
 	npm run lint:markdown
 
+# @ name: Lint Go
+# @ description: Verifies that Go files are formatted and pass go vet.
+# @ risk: low
+# @ read-only: true
+# @ destructive: false
+# @ idempotent: true
+# @ open-world: false
+# @ param: none
+# @ output: gofmt check results and go vet diagnostics
+# @ output-type: text/plain
+lint-go:
+	@{ \
+		out="$$(gofmt -l $$(find ./cmd ./pkg ./internal -name '*.go' -type f))" ; \
+		if [ -n "$$out" ]; then \
+			printf '%s\n' "$$out" ; \
+			exit 1 ; \
+		fi ; \
+		go vet ./... ; \
+	}
+
+# @ name: Lint
+# @ description: Runs repository linting and validation checks required by CI.
+# @ risk: low
+# @ read-only: true
+# @ destructive: false
+# @ idempotent: true
+# @ open-world: false
+# @ param: none
+# @ output: Lint and validation results
+# @ output-type: text/plain
+lint: format lint-go lint-markdown validate
+
 # @ name: Build
-# @ description: Compiles all binaries to ./bin/
+# @ description: Compiles all binaries and builds all containers
 # @ risk: low
 # @ read-only: false
 # @ destructive: false
@@ -50,12 +145,28 @@ lint-markdown:
 # @ param: none
 # @ output: Binaries at ./bin/
 # @ output-type: application/octet-stream
-build: tests build-validator build-mcp-server
+build: tests build-validator build-mcp-server integration-build-k6 build-container
 
-# Sets up Grafana LGTM versions and configured a symlink so GEMINI.md can read the AGENTS.md file.
+# Sets up Grafana LGTM versions, configures a symlink so GEMINI.md can read the AGENTS.md file,
+# and installs a git pre-commit hook that runs lint and unit tests before each commit.
 setup:
-	printf "LGTM_VERSION=$(LGTM_VERSION)" > ./$(DEV_DIR)/compose_versions
-	ln -s AGENTS.md GEMINI.md
+	printf "LGTM_VERSION=$(LGTM_VERSION)" > "$(DEV_DIR)/compose_versions"
+	ln -sf AGENTS.md GEMINI.md
+	printf '#!/usr/bin/env sh\nmake pre-commit\n' > .git/hooks/pre-commit
+	chmod +x .git/hooks/pre-commit
+
+# @ name: Pre-commit
+# @ description: Runs linting and unit tests. Installed as a git pre-commit hook by the setup recipe.
+# @ risk: low
+# @ read-only: true
+# @ destructive: false
+# @ idempotent: true
+# @ open-world: false
+# @ param: none
+# @ output: Lint and test results
+# @ output-type: text/plain
+.PHONY: pre-commit
+pre-commit: lint unit-tests
 
 # @ name: Build Validator
 # @ description: Compiles the makefile validator CLI binary to ./bin/validate.
@@ -169,7 +280,7 @@ dev-volumes:
 
 .PHONY: dev-up
 # @ name: Start development dependencies
-# @ description: Starts development dependencies defined in the dev docker-compose.yml file (idempotent)
+# @ description: Starts the full local development stack, including LGTM and the Grafana MCP sidecar (idempotent)
 # @ risk: low
 # @ read-only: false
 # @ destructive: false
@@ -179,18 +290,26 @@ dev-volumes:
 # @ output: none
 # @ output-type: text/plain
 dev-up: dev-volumes
-	@{ docker compose \
-		-f $(DEV_DIR)/docker-compose.yml \
+	@{ $(_DEV_COMPOSE_ENV) docker compose \
+		$(_DEV_FULL_COMPOSE) \
 		--env-file="$(DEV_DIR)/compose_versions" \
 		up \
 		-d \
 		--wait ; }
 
+.PHONY: dev-up-lgtm
+dev-up-lgtm: dev-volumes
+	@{ $(_DEV_COMPOSE_ENV) docker compose \
+		$(_DEV_LGTM_COMPOSE) \
+		--env-file="$(DEV_DIR)/compose_versions" \
+		up \
+		-d \
+		--wait ; }
 
 .PHONY: dev-down
 # @ name: Stop development dependencies
-# @ description: Stops development dependencies defined in the dev docker-compose.yml file
-# @ risk: low
+# @ description: Stops the full local development stack, including LGTM and the Grafana MCP sidecar
+# @ risk: medium
 # @ read-only: false
 # @ destructive: true
 # @ idempotent: true
@@ -199,14 +318,14 @@ dev-up: dev-volumes
 # @ output: The shutdown logs of the running containers in the stack.
 # @ output-type: text/plain
 dev-down: ## Stop and remove the local LGTM development stack
-	@{ docker compose \
+	@{ $(_DEV_COMPOSE_ENV) docker compose \
 		--env-file="$(DEV_DIR)/compose_versions" \
-		-f $(DEV_DIR)/docker-compose.yml \
+		$(_DEV_FULL_COMPOSE) \
 		down ; }
 
 .PHONY: dev-logs
 # @ name: Fetch Docker Compose Logs
-# @ description: Fetches docker compose service logs for containers managed by the ./dev/docker-compose.yml file
+# @ description: Fetches docker compose service logs for the full local development stack
 # @ risk: low
 # @ read-only: true
 # @ destructive: false
@@ -216,12 +335,318 @@ dev-down: ## Stop and remove the local LGTM development stack
 # @ output: Docker container logs
 # @ output-type: text/plain
 dev-logs:
-	docker compose logs -f $(DEV_DIR)/docker-compose.yml
+	$(_DEV_COMPOSE_ENV) docker compose $(_DEV_FULL_COMPOSE) logs
 
 # Tails logs from the LGTM dev stack
 .PHONY: dev-logs-tail
 dev-logs-tail:
-	docker compose logs -f $(DEV_DIR)/docker-compose.yml
+	$(_DEV_COMPOSE_ENV) docker compose $(_DEV_FULL_COMPOSE) logs -f
+
+# @ name: Build Container
+# @ description: Builds the make-mcp container image locally. Requires IMAGE_TAG (default: latest). All tests must pass their per-package coverage thresholds or the build fails.
+# @ risk: low
+# @ read-only: false
+# @ destructive: false
+# @ idempotent: true
+# @ open-world: false
+# @ param: IMAGE_TAG - Container image tag to apply to the built image (default: latest)
+# @ output: Docker build output as JSON progress records
+# @ output-type: application/json
+.PHONY: build-container
+build-container:
+	docker build --progress=rawjson \
+		--add-host "host.docker.internal:host-gateway" \
+		--build-arg "OTEL_EXPORTER_OTLP_ENDPOINT=$(OTEL_TEST_ENDPOINT)" \
+		-t "$(IMAGE_NAME):$(IMAGE_TAG)" .
+
+# @ name: Publish Container
+# @ description: Builds and pushes the make-mcp container image to the GitHub Container Registry. Requires IMAGE_TAG (default: latest). Authenticates via the gh CLI.
+# @ risk: high
+# @ read-only: false
+# @ destructive: false
+# @ idempotent: true
+# @ open-world: true
+# @ param: IMAGE_TAG - Container image tag to build and push (default: latest)
+# @ output: Docker build and push output as JSON progress records
+# @ output-type: application/json
+.PHONY: publish
+publish: build-container
+	gh auth token | docker login ghcr.io -u "$(GITHUB_OWNER)" --password-stdin
+	docker push --progress=rawjson "$(IMAGE_NAME):$(IMAGE_TAG)"
+
+## Integration testing
+
+.PHONY: integration-debug
+# @ name: Integration Debug (local LGTM)
+# @ description: Ensures the dev LGTM stack and MCP server are running, then starts k6 or attaches to an already-running k6 session. LGTM is never stopped by this target — use dev-down to tear it down manually. k6 stops on a non-zero exit and will not be restarted until this target is run again.
+# @ risk: low
+# @ read-only: true
+# @ destructive: false
+# @ idempotent: true
+# @ open-world: true
+# @ param: none
+# @ output: k6 integration test results and pass/fail summary
+# @ output-type: text/plain
+integration-debug: integration-build-k6
+	@{ \
+		set -e ; \
+		mkdir -p "$(DEV_DIR)/tmp" ; \
+		$(_DEV_COMPOSE_ENV) docker compose \
+			$(_DEV_FULL_COMPOSE) \
+			--env-file="$(DEV_DIR)/compose_versions" \
+			up -d --wait ; \
+		MAKE_MCP_IMAGE="$(IMAGE_NAME):$(IMAGE_TAG)" K6_IMAGE="$(K6_IMAGE)" K6_SCRIPT="$(K6_SCRIPT)" $(_SERVER_OTEL_ENV) $(_K6_OTEL_ENV) \
+			$(_INTEGRATION_COMPOSE_ENV) docker compose \
+				$(_INTEGRATION_STACK_COMPOSE) \
+				$(_INTEGRATION_TELEMETRY_COMPOSE) \
+				up -d --wait make-mcp-server ; \
+		MAKE_MCP_IMAGE="$(IMAGE_NAME):$(IMAGE_TAG)" K6_IMAGE="$(K6_IMAGE)" K6_SCRIPT="$(K6_SCRIPT)" $(_SERVER_OTEL_ENV) $(_K6_OTEL_ENV) \
+			$(_INTEGRATION_COMPOSE_ENV) docker compose \
+				$(_INTEGRATION_STACK_COMPOSE) \
+				$(_INTEGRATION_TELEMETRY_COMPOSE) \
+				up -d --no-deps k6 ; \
+	}
+
+K6_IMAGE ?= make-mcp-k6:local
+K6_SCRIPT ?= /scripts/integration.js
+
+# OTel env vars forwarded to the integration containers when an external or
+# host LGTM collector is the telemetry target.
+_K6_OTEL_ENV := K6_OUT=$(K6_OUT) \
+	K6_OTEL_GRPC_EXPORTER_ENDPOINT=$(K6_OTEL_GRPC_EXPORTER_ENDPOINT) \
+	K6_OTEL_GRPC_EXPORTER_INSECURE=$(K6_OTEL_GRPC_EXPORTER_INSECURE) \
+	K6_OTEL_SERVICE_NAME=$(K6_OTEL_SERVICE_NAME)
+
+_SERVER_OTEL_ENV := OTEL_TRACES_EXPORTER=$(OTEL_TRACES_EXPORTER) \
+	OTEL_METRICS_EXPORTER=$(OTEL_METRICS_EXPORTER) \
+	OTEL_EXPORTER_OTLP_ENDPOINT=$(OTEL_EXPORTER_OTLP_ENDPOINT) \
+	OTEL_EXPORTER_OTLP_INSECURE=$(OTEL_EXPORTER_OTLP_INSECURE) \
+	OTEL_SERVICE_NAME=$(OTEL_SERVICE_NAME) \
+	OTEL_METRIC_EXPORT_INTERVAL=$(OTEL_METRIC_EXPORT_INTERVAL)
+
+# Builds the custom k6+xk6-mcp image used by the integration test stack.
+.PHONY: integration-build-k6
+integration-build-k6:
+	docker build --progress=rawjson \
+		-f "$(DEV_DIR)/integration/k6/Dockerfile" \
+		-t "$(K6_IMAGE)" \
+		"$(DEV_DIR)/integration/k6"
+
+.PHONY: integration
+# @ name: Integration Tests
+# @ description: Builds the k6+xk6-mcp image, starts the MCP server container with HTTP transport, runs MCP protocol integration tests (tools/list and tools/call) via k6, then tears everything down. All artefacts are written to ./dev/tmp/ and removed on exit.
+# @ risk: medium
+# @ read-only: true
+# @ destructive: false
+# @ idempotent: true
+# @ open-world: true
+# @ param: none
+# @ output: k6 integration test results and pass/fail summary
+# @ output-type: text/plain
+integration: build
+	@{ \
+		set -e ; \
+		mkdir -p "$(DEV_DIR)/tmp" ; \
+		trap '$(_INTEGRATION_COMPOSE_ENV) docker compose $(_INTEGRATION_STACK_COMPOSE) down --remove-orphans ; rm -rf "$(DEV_DIR)/tmp"' EXIT INT TERM ; \
+		$(_INTEGRATION_COMPOSE_ENV) docker compose $(_INTEGRATION_STACK_COMPOSE) down --remove-orphans >/dev/null 2>&1 || true ; \
+		MAKE_MCP_IMAGE="$(IMAGE_NAME):$(IMAGE_TAG)" K6_IMAGE="$(K6_IMAGE)" K6_SCRIPT="$(K6_SCRIPT)" \
+			$(_INTEGRATION_COMPOSE_ENV) docker compose $(_INTEGRATION_STACK_COMPOSE) up -d --wait make-mcp-server ; \
+		MAKE_MCP_IMAGE="$(IMAGE_NAME):$(IMAGE_TAG)" K6_IMAGE="$(K6_IMAGE)" K6_SCRIPT="$(K6_SCRIPT)" \
+			$(_INTEGRATION_COMPOSE_ENV) docker compose $(_INTEGRATION_STACK_COMPOSE) up --abort-on-container-exit --exit-code-from k6 k6 ; \
+	}
+
+.PHONY: integration-lgtm
+# @ name: Integration Tests (with LGTM)
+# @ description: Starts the full local development stack, runs the MCP protocol integration tests with OTel metrics and traces exported to LGTM, then tears down both the integration stack and the local dev stack on exit.
+# @ risk: medium
+# @ read-only: true
+# @ destructive: false
+# @ idempotent: true
+# @ open-world: true
+# @ param: none
+# @ output: k6 integration test results and pass/fail summary
+# @ output-type: text/plain
+integration-lgtm: integration-build-k6 build-container dev-volumes
+	@{ \
+		set -e ; \
+		mkdir -p "$(DEV_DIR)/tmp" ; \
+		$(_DEV_COMPOSE_ENV) docker compose $(_DEV_FULL_COMPOSE) --env-file="$(DEV_DIR)/compose_versions" up -d --wait ; \
+		trap '$(_INTEGRATION_COMPOSE_ENV) docker compose \
+				$(_INTEGRATION_STACK_COMPOSE) \
+				$(_INTEGRATION_TELEMETRY_COMPOSE) \
+				down --remove-orphans ; \
+			rm -rf "$(DEV_DIR)/tmp" ; \
+			$(_DEV_COMPOSE_ENV) docker compose $(_DEV_FULL_COMPOSE) --env-file="$(DEV_DIR)/compose_versions" down' EXIT INT TERM ; \
+		$(_INTEGRATION_COMPOSE_ENV) docker compose $(_INTEGRATION_STACK_COMPOSE) $(_INTEGRATION_TELEMETRY_COMPOSE) down --remove-orphans >/dev/null 2>&1 || true ; \
+		MAKE_MCP_IMAGE="$(IMAGE_NAME):$(IMAGE_TAG)" K6_IMAGE="$(K6_IMAGE)" K6_SCRIPT="$(K6_SCRIPT)" $(_SERVER_OTEL_ENV) $(_K6_OTEL_ENV) \
+			$(_INTEGRATION_COMPOSE_ENV) docker compose \
+				$(_INTEGRATION_STACK_COMPOSE) \
+				$(_INTEGRATION_TELEMETRY_COMPOSE) \
+				up -d --wait make-mcp-server ; \
+		MAKE_MCP_IMAGE="$(IMAGE_NAME):$(IMAGE_TAG)" K6_IMAGE="$(K6_IMAGE)" K6_SCRIPT="$(K6_SCRIPT)" $(_SERVER_OTEL_ENV) $(_K6_OTEL_ENV) \
+			$(_INTEGRATION_COMPOSE_ENV) docker compose \
+				$(_INTEGRATION_STACK_COMPOSE) \
+				$(_INTEGRATION_TELEMETRY_COMPOSE) \
+				up --abort-on-container-exit --exit-code-from k6 k6 ; \
+	}
+
+.PHONY: integration-otel
+# @ name: Integration Tests (OTel, LGTM already running)
+# @ description: Runs the MCP protocol integration tests with OTel output to an existing OTLP collector, such as a host LGTM stack. It does not start or stop the collector and tears down only the integration containers on exit.
+# @ risk: medium
+# @ read-only: true
+# @ destructive: false
+# @ idempotent: true
+# @ open-world: true
+# @ param: none
+# @ output: k6 integration test results and pass/fail summary
+# @ output-type: text/plain
+integration-otel: integration-build-k6 build-container
+	@{ \
+		set -e ; \
+		mkdir -p "$(DEV_DIR)/tmp" ; \
+		trap '$(_INTEGRATION_COMPOSE_ENV) docker compose \
+				$(_INTEGRATION_STACK_COMPOSE) \
+				$(_INTEGRATION_TELEMETRY_COMPOSE) \
+				down --remove-orphans ; \
+			rm -rf "$(DEV_DIR)/tmp"' EXIT INT TERM ; \
+		$(_INTEGRATION_COMPOSE_ENV) docker compose $(_INTEGRATION_STACK_COMPOSE) $(_INTEGRATION_TELEMETRY_COMPOSE) down --remove-orphans >/dev/null 2>&1 || true ; \
+		MAKE_MCP_IMAGE="$(IMAGE_NAME):$(IMAGE_TAG)" K6_IMAGE="$(K6_IMAGE)" K6_SCRIPT="$(K6_SCRIPT)" $(_SERVER_OTEL_ENV) $(_K6_OTEL_ENV) \
+			$(_INTEGRATION_COMPOSE_ENV) docker compose \
+				$(_INTEGRATION_STACK_COMPOSE) \
+				$(_INTEGRATION_TELEMETRY_COMPOSE) \
+				up -d --wait make-mcp-server ; \
+		MAKE_MCP_IMAGE="$(IMAGE_NAME):$(IMAGE_TAG)" K6_IMAGE="$(K6_IMAGE)" K6_SCRIPT="$(K6_SCRIPT)" $(_SERVER_OTEL_ENV) $(_K6_OTEL_ENV) \
+			$(_INTEGRATION_COMPOSE_ENV) docker compose \
+				$(_INTEGRATION_STACK_COMPOSE) \
+				$(_INTEGRATION_TELEMETRY_COMPOSE) \
+				up --abort-on-container-exit --exit-code-from k6 k6 ; \
+	}
+
+.PHONY: integration-act
+integration-act: integration-build-k6 build-container dev-up-lgtm
+	@{ \
+		set -e ; \
+		mkdir -p "$(DEV_DIR)/tmp" ; \
+		trap '$(_INTEGRATION_COMPOSE_ENV) docker compose \
+				$(_INTEGRATION_STACK_COMPOSE) \
+				$(_INTEGRATION_TELEMETRY_COMPOSE) \
+				down --remove-orphans ; \
+			rm -rf "$(DEV_DIR)/tmp"' EXIT INT TERM ; \
+		$(_INTEGRATION_COMPOSE_ENV) docker compose $(_INTEGRATION_STACK_COMPOSE) $(_INTEGRATION_TELEMETRY_COMPOSE) down --remove-orphans >/dev/null 2>&1 || true ; \
+		MAKE_MCP_IMAGE="$(IMAGE_NAME):$(IMAGE_TAG)" K6_IMAGE="$(K6_IMAGE)" K6_SCRIPT="$(K6_SCRIPT)" $(_SERVER_OTEL_ENV) $(_K6_OTEL_ENV) \
+			$(_INTEGRATION_COMPOSE_ENV) docker compose \
+				$(_INTEGRATION_STACK_COMPOSE) \
+				$(_INTEGRATION_TELEMETRY_COMPOSE) \
+				up -d --wait make-mcp-server ; \
+		MAKE_MCP_IMAGE="$(IMAGE_NAME):$(IMAGE_TAG)" K6_IMAGE="$(K6_IMAGE)" K6_SCRIPT="$(K6_SCRIPT)" $(_SERVER_OTEL_ENV) $(_K6_OTEL_ENV) \
+			$(_INTEGRATION_COMPOSE_ENV) docker compose \
+				$(_INTEGRATION_STACK_COMPOSE) \
+				$(_INTEGRATION_TELEMETRY_COMPOSE) \
+				up --abort-on-container-exit --exit-code-from k6 k6 ; \
+	}
+
+# @ name: Build Release Archives
+# @ description: Builds Linux amd64 and arm64 release zip archives in ./dist for the provided semantic version tag.
+# @ risk: low
+# @ read-only: false
+# @ destructive: false
+# @ idempotent: true
+# @ open-world: false
+# @ param: VERSION string | Semantic version tag to package, for example v1.2.3
+# @ output: Release zip archives written to ./dist
+# @ output-type: text/plain
+.PHONY: build-release-archives
+build-release-archives:
+	@{ \
+		set -e ; \
+		if [ -z "$(VERSION)" ]; then \
+			printf '%s\n' "VERSION is required" ; \
+			exit 1 ; \
+		fi ; \
+		mkdir -p "$(DIST_DIR)" ; \
+		tmpdir="$$(mktemp -d)" ; \
+		trap 'rm -rf "$$tmpdir"' EXIT ; \
+		for arch in "amd64" "arm64"; do \
+			stage_dir="$$tmpdir/make-mcp_$(VERSION)_linux_$$arch" ; \
+			mkdir -p "$$stage_dir" ; \
+			CGO_ENABLED="0" GOOS="linux" GOARCH="$$arch" go build -o "$$stage_dir/mcp-server" ./cmd/mcp-server ; \
+			cp "./README.md" "$$stage_dir/README.md" ; \
+			cp "./make-mcp.yml" "$$stage_dir/make-mcp.yml" ; \
+			( cd "$$tmpdir" && zip -qr "$(CURDIR)/$(DIST_DIR)/make-mcp_$(VERSION)_linux_$$arch.zip" "make-mcp_$(VERSION)_linux_$$arch" ) ; \
+		done ; \
+		ls -1 "$(DIST_DIR)"/*.zip ; \
+	}
+
+# @ name: Upload Discord Webhook Secret
+# @ description: Stores a Discord webhook URL as the DISCORD_WEBHOOK_URL GitHub Actions secret using the gh CLI, and also writes it to the local ACT_SECRET_FILE (.act.secrets) so act can read it when running workflows locally.
+# @ risk: high
+# @ read-only: false
+# @ destructive: false
+# @ idempotent: true
+# @ open-world: true
+# @ param: WEBHOOK_URL string | Discord webhook URL to store as the DISCORD_WEBHOOK_URL GitHub Actions secret
+# @ output: Confirmation that the repository secret has been updated and the local secrets file has been written
+# @ output-type: text/plain
+.PHONY: upload-discord-webhook
+upload-discord-webhook:
+	@{ \
+		set -e ; \
+		webhook_url="$$(printf '%s' "$$WEBHOOK_URL" | tr -d '\r\n')" ; \
+		if [ -z "$$webhook_url" ]; then \
+			printf '%s\n' "WEBHOOK_URL is required" ; \
+			exit 1 ; \
+		fi ; \
+		gh secret set "DISCORD_WEBHOOK_URL" --body "$$webhook_url" ; \
+		printf '%s\n' "DISCORD_WEBHOOK_URL updated" ; \
+		secret_file="$(ACT_SECRET_FILE)" ; \
+		touch "$$secret_file" ; \
+		if grep -q "^DISCORD_WEBHOOK_URL=" "$$secret_file" 2>/dev/null; then \
+			sed -i "s|^DISCORD_WEBHOOK_URL=.*|DISCORD_WEBHOOK_URL=$$webhook_url|" "$$secret_file" ; \
+		else \
+			printf 'DISCORD_WEBHOOK_URL=%s\n' "$$webhook_url" >> "$$secret_file" ; \
+		fi ; \
+		printf '%s\n' "DISCORD_WEBHOOK_URL written to $$secret_file for act" ; \
+	}
+
+# @ name: Run GitHub Actions Locally With ACT Using the Current GH Token
+# @ description: Fetches the current gh CLI token and passes it directly to act as GH_TOKEN and GITHUB_TOKEN secrets without writing the token to disk.
+# @ risk: low
+# @ read-only: false
+# @ destructive: false
+# @ idempotent: true
+# @ open-world: true
+# @ param: none
+# @ output: act workflow execution logs
+# @ output-type: text/plain
+.PHONY: act-run
+act-run:
+	@{ \
+		set -e ; \
+		act_args="" ; \
+		if [ -n "$(ACT_JOB)" ]; then \
+			act_args="$$act_args --job $(ACT_JOB)" ; \
+		fi ; \
+		if [ -f "$(ACT_SECRET_FILE)" ]; then \
+			act_args="$$act_args --secret-file $(ACT_SECRET_FILE)" ; \
+		fi ; \
+		token="$$(gh auth token)" ; \
+		if [ -z "$$token" ]; then \
+			printf '%s\n' "gh auth token returned an empty token" ; \
+			exit 1 ; \
+		fi ; \
+		act \
+			--json \
+			--workflows "$(ACT_WORKFLOW)" \
+			--platform "ubuntu-latest=$(ACT_IMAGE)" \
+			--container-options "--add-host=host.docker.internal:host-gateway" \
+			--env "ACT=true" \
+			--env "ACT_OTEL_EXPORTER_OTLP_ENDPOINT=$(ACT_OTEL_ENDPOINT)" \
+			--secret "GH_TOKEN=$$token" \
+			--secret "GITHUB_TOKEN=$$token" \
+			$(ACT_EVENT) \
+			$$act_args ; \
+	}
 
 # Runs a local instance of the mcp inspector for debugging
 dev-mcp-inspector: build

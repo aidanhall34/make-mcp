@@ -1,0 +1,55 @@
+---
+# Integration test stack.
+#
+# Starts the make-mcp server with HTTP transport and runs the k6 xk6-mcp
+# functional test suite against it.  Used by `make integration`.
+#
+# Environment variables (all optional):
+#   MAKE_MCP_IMAGE                  Server image to test (default: ghcr.io/aidanhall34/make-mcp:latest)
+#   K6_IMAGE                        k6 image with xk6-mcp bundled (default: make-mcp-k6:local)
+#   K6_OUT                          k6 output plugin, e.g. experimental-opentelemetry
+#   K6_OTEL_GRPC_EXPORTER_ENDPOINT  OTel gRPC collector endpoint
+#   K6_OTEL_GRPC_EXPORTER_INSECURE  Set true for plaintext gRPC (local dev)
+#   K6_OTEL_SERVICE_NAME            OTel service name reported by k6
+
+services:
+  make-mcp-server:
+    image: ${MAKE_MCP_IMAGE:-ghcr.io/aidanhall34/make-mcp:latest}
+    container_name: make-mcp-integration-server
+    volumes:
+      # Override the embedded config to enable HTTP transport.
+      - ./integration/make-mcp.yml:/opt/make-mcp/make-mcp.yml:ro
+      # Mount the testdata Makefile as the server's recipe source.
+      - ../testdata/Makefile:/opt/make-mcp/makefile:ro
+    healthcheck:
+      # /ready returns 200 "ready\n" once at least one tool is registered.
+      test: ["CMD-SHELL", "wget -qO /dev/null http://localhost:9378/ready"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+      start_period: 5s
+
+  k6:
+    # Image is pre-built by `make integration-build-k6` (docker build --progress=rawjson).
+    image: ${K6_IMAGE:-make-mcp-k6:local}
+    container_name: make-mcp-k6
+    depends_on:
+      make-mcp-server:
+        condition: service_healthy
+    volumes:
+      - ./integration/k6:/scripts:ro
+      # Test artefacts (summary JSON, logs) land in the ephemeral tmp directory.
+      - ./tmp:/tmp/k6-results
+    environment:
+      MCP_BASE_URL: "http://make-mcp-server:9378/mcp"
+      # Pass k6 OTel env vars through from the host so that local or CI
+      # runs can emit metrics to a collector without changing the image.
+      K6_OUT: ${K6_OUT:-}
+      K6_OTEL_GRPC_EXPORTER_ENDPOINT: ${K6_OTEL_GRPC_EXPORTER_ENDPOINT:-}
+      K6_OTEL_GRPC_EXPORTER_INSECURE: ${K6_OTEL_GRPC_EXPORTER_INSECURE:-true}
+      K6_OTEL_SERVICE_NAME: ${K6_OTEL_SERVICE_NAME:-make-mcp-integration}
+    command:
+      - run
+      - --out
+      - json=/tmp/k6-results/summary.json
+      - ${K6_SCRIPT:-/scripts/integration.js}

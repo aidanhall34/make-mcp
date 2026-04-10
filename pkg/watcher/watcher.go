@@ -81,8 +81,14 @@ func (w *Watcher) Close() error {
 }
 
 func (w *Watcher) loop() {
-	defer close(w.events)
-	defer close(w.errors)
+	defer func() {
+		// Hold mu so flush() can't race on w.events between its done-check
+		// and the actual channel close.
+		w.mu.Lock()
+		close(w.events)
+		close(w.errors)
+		w.mu.Unlock()
+	}()
 
 	for {
 		select {
@@ -127,6 +133,14 @@ func (w *Watcher) enqueue(path string) {
 func (w *Watcher) flush() {
 	w.mu.Lock()
 	defer w.mu.Unlock()
+
+	// Check whether the watcher has been stopped. If so, w.events is about to
+	// be (or has been) closed under w.mu in loop's defer; skip the send.
+	select {
+	case <-w.done:
+		return
+	default:
+	}
 
 	now := time.Now()
 	for path, readyAt := range w.pending {
