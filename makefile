@@ -200,8 +200,11 @@ build: tests build-validator build-mcp-server integration-build-k6 build-contain
 setup:
 	printf "LGTM_VERSION=$(LGTM_VERSION)" > "$(DEV_DIR)/compose_versions"
 	ln -sf AGENTS.md GEMINI.md
+	npm install
 	printf '#!/usr/bin/env sh\nmake pre-commit\n' > .git/hooks/pre-commit
 	chmod +x .git/hooks/pre-commit
+	printf '#!/usr/bin/env sh\nnpx --no -- commitlint --edit "$$1"\n' > .git/hooks/commit-msg
+	chmod +x .git/hooks/commit-msg
 
 # @ name: Pre-commit
 # @ description: Runs linting and unit tests. Installed as a git pre-commit hook by the setup recipe.
