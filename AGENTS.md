@@ -21,7 +21,7 @@ the same project context without relying on global machine configuration.
 
 # Docs conventions
 
-- Documentation is written to the `./docs` folder in markdown format.
+- Documentation is written to the `./wiki` folder in GitHub Wiki format.
 - Keep user-facing setup and annotation examples in `./README.md`.
 
 # Makefile conventions

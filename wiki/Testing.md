@@ -103,9 +103,6 @@ Integration tests verify the MCP protocol interface (streamable HTTP) from the
 perspective of an external MCP client.  They are **not** load tests —
 correctness and protocol compliance only.
 
-> **Transport note:** make-mcp exposes the streamable HTTP transport only.  The
-> legacy SSE transport is not supported.
-
 ### Tools
 
 - **k6** — load testing tool used here for functional protocol testing

@@ -246,19 +246,19 @@ the server returns an MCP error instead of a successful tool result.
 
 ## Installation
 
-See the [Installation](https://github.com/aidanhall34/make-mcp/wiki/Installation) page in the [GitHub Wiki](https://github.com/aidanhall34/make-mcp/wiki/Installation) for instructions to install from GitHub
+See [[Installation]] for instructions to install from GitHub
 Releases, Docker, `go install`, or build from source.
 
 ## Documentation
 
-For more detailed information, see the [GitHub Wiki](https://github.com/aidanhall34/make-mcp/wiki):
+For more detailed information, see:
 
-- [Installation](https://github.com/aidanhall34/make-mcp/wiki/Installation)
-- [Testing](https://github.com/aidanhall34/make-mcp/wiki/Testing)
-- [GitHub CI](https://github.com/aidanhall34/make-mcp/wiki/GitHub-CI)
-- [Architecture Proposal](https://github.com/aidanhall34/make-mcp/wiki/Architecture-Proposal)
-- [Output Types](https://github.com/aidanhall34/make-mcp/wiki/Output-Types)
-- [Metrics](https://github.com/aidanhall34/make-mcp/wiki/Metrics)
+- [[Installation]]
+- [[Testing]]
+- [[GitHub CI]]
+- [[Architecture Proposal]]
+- [[Output Types]]
+- [[Metrics]]
 
 ## Development
 

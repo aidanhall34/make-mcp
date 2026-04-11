@@ -43,7 +43,7 @@ pkg/
       http.go           # POST /mcp (client→server) + GET /mcp SSE (server→client).
 ```
 
-All new packages follow AGENTS.md: packages under `./pkg`, the binary under
+All new packages follow [AGENTS.md](https://github.com/aidanhall34/make-mcp/blob/main/AGENTS.md): packages under `./pkg`, the binary under
 `./cmd`.
 
 ---

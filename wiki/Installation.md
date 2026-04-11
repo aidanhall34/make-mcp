@@ -65,7 +65,7 @@ ENTRYPOINT ["make-mcp"]
 ```
 
 For a complete example of a container with `make` and other testing utilities,
-see the [integration test container](../dev/integration/Dockerfile.test-server).
+see the [integration test container](https://github.com/aidanhall34/make-mcp/blob/main/dev/integration/Dockerfile.test-server).
 
 ### Running the Scratch Image Directly
 

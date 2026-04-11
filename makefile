@@ -296,6 +296,20 @@ setup:
 	chmod +x .git/hooks/commit-msg
 
 
+.PHONY: generate-wiki-sidebar
+# @ name: Generate Wiki Sidebar
+# @ description: Generates the wiki sidebar from all .md files in the wiki directory. Fails if the sidebar was outdated.
+# @ risk: low
+# @ read-only: false
+# @ destructive: false
+# @ idempotent: true
+# @ open-world: false
+# @ param: none
+# @ output: Updated wiki/_Sidebar.md or a success message
+# @ output-type: text/plain
+generate-wiki-sidebar:
+	@./scripts/gen-wiki-sidebar.sh
+
 .PHONY: pre-commit
 # @ name: Pre-commit
 # @ description: Runs linting, unit tests, and security scans. Installed as a git pre-commit hook by the setup recipe.
@@ -307,7 +321,7 @@ setup:
 # @ param: none
 # @ output: Lint, test, and scan results
 # @ output-type: text/plain
-pre-commit: lint unit-tests scan-secrets scan-vulnerabilities
+pre-commit: generate-wiki-sidebar lint unit-tests scan-secrets scan-vulnerabilities
 
 # @ name: Build Validator
 # @ description: Compiles the makefile validator CLI binary to ./bin/make-mcp-validate.
