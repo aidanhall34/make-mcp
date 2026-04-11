@@ -550,6 +550,28 @@ build-container:
 	} $(call _tee-log,build-container) ; \
 	wait
 
+.PHONY: build-test-image
+# @ name: Build Test Image
+# @ description: Builds only the minimal testing container image. This target does not depend on build-container; it expects the base image (IMAGE_NAME:IMAGE_TAG) to be already available locally (e.g. loaded from a tar in CI).
+# @ risk: low
+# @ read-only: false
+# @ destructive: false
+# @ idempotent: true
+# @ open-world: false
+# @ param: IMAGE_TAG string | Container image tag to apply (default: latest)
+# @ output: Docker build output
+# @ output-type: application/octet-stream
+build-test-image:
+	@mkdir -p "$(_LOG_DIR)"
+	@{ \
+		docker build --progress=rawjson \
+			--build-arg "MAKE_MCP_IMAGE=$(IMAGE_NAME):$(IMAGE_TAG)" \
+			-t "$(TEST_IMAGE_NAME):$(IMAGE_TAG)" \
+			-f "$(DEV_DIR)/integration/Dockerfile.test-server" \
+			"$(DEV_DIR)/integration" ; \
+	} $(call _tee-log,build-test-image) ; \
+	wait
+
 .PHONY: build-test-container
 # @ name: Build Test Container
 # @ description: Builds a minimal testing container for CI that includes make and other utilities. This image is used for integration tests and serves as an example for users.
@@ -561,16 +583,7 @@ build-container:
 # @ param: IMAGE_TAG string | Container image tag to apply (default: latest)
 # @ output: Docker build output
 # @ output-type: application/octet-stream
-build-test-container: build-container
-	@mkdir -p "$(_LOG_DIR)"
-	@{ \
-		docker build --progress=rawjson \
-			--build-arg "MAKE_MCP_IMAGE=$(IMAGE_NAME):$(IMAGE_TAG)" \
-			-t "$(TEST_IMAGE_NAME):$(IMAGE_TAG)" \
-			-f "$(DEV_DIR)/integration/Dockerfile.test-server" \
-			"$(DEV_DIR)/integration" ; \
-	} $(call _tee-log,build-test-container) ; \
-	wait
+build-test-container: build-container build-test-image
 
 # @ name: Publish Container
 # @ description: Builds and pushes the make-mcp container image to the GitHub Container Registry. Requires IMAGE_TAG (default: latest). Authenticates via the gh CLI.
@@ -992,7 +1005,7 @@ smoke-test-container: build-test-container
 			-p 9378:9378 \
 			-v "$(CURDIR)/testdata/Makefile:/opt/make-mcp/makefile:ro" \
 			"$$image" \
-			--transport http --listen 0.0.0.0:9378 ; \
+			--transport http --listen 0.0.0.0:9378 --makefile /opt/make-mcp/makefile ; \
 		trap 'docker rm -f "$$container_name" 2>/dev/null || true' EXIT INT TERM ; \
 		retries=30 ; \
 		until curl -sf "http://localhost:9378/ready" >/dev/null 2>&1 ; do \

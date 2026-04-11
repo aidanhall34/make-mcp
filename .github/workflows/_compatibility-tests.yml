@@ -70,6 +70,9 @@ jobs:
       - name: Load container image
         run: docker load -i dist/make-mcp_${{ inputs.image-tag }}_linux_${{ inputs.arch }}.tar
 
+      - name: Build test image
+        run: make build-test-image IMAGE_TAG="${{ inputs.image-tag }}"
+
       - name: Run container compatibility tests
         run: |
           IMAGE_TAG="${{ inputs.image-tag }}" K6_SCRIPT="/scripts/tools-list.js" make integration-prebuilt
