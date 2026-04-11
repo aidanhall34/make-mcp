@@ -52,7 +52,7 @@ For more detailed information, see the [GitHub Wiki](https://github.com/aidanhal
 - [Testing](https://github.com/aidanhall34/make-mcp/wiki/Testing)
 - [GitHub CI](https://github.com/aidanhall34/make-mcp/wiki/GitHub-CI)
 - [Architecture](https://github.com/aidanhall34/make-mcp/wiki/Architecture)
-- [Metrics](https://github.com/aidanhall34/make-mcp/wiki/Metrics)
+- [Telemetry](https://github.com/aidanhall34/make-mcp/wiki/Telemetry)
 
 ## Development
 
