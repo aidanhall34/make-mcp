@@ -1,9 +1,7 @@
 import http from 'k6/http';
 import { check, fail } from 'k6';
-import tempo from 'https://jslib.k6.io/http-instrumentation-tempo/1.0.1/index.js';
 
 export const BASE_URL = (__ENV.MCP_BASE_URL || 'http://localhost:9378/mcp').replace(/\/$/, '');
-const tracedHTTP = new tempo.Client({ propagator: 'w3c' });
 const REQUEST_TIMEOUT = __ENV.MCP_HTTP_TIMEOUT || '30s';
 const MCP_PROTOCOL_VERSION = '2024-11-05';
 const SESSION_HEADER = 'Mcp-Session-Id';
@@ -50,7 +48,7 @@ function sessionHeaders(sessionId) {
 }
 
 function initializeSession() {
-  const response = tracedHTTP.post(
+  const response = http.post(
     BASE_URL,
     jsonRPC('initialize', {
       protocolVersion: MCP_PROTOCOL_VERSION,
@@ -71,7 +69,7 @@ function initializeSession() {
     fail(`initialize response missing ${SESSION_HEADER} header`);
   }
 
-  const initialized = tracedHTTP.post(
+  const initialized = http.post(
     BASE_URL,
     JSON.stringify({
       jsonrpc: '2.0',
@@ -89,7 +87,7 @@ function initializeSession() {
 
 export function listAllTools() {
   const { sessionId } = initializeSession();
-  const response = tracedHTTP.post(
+  const response = http.post(
     BASE_URL,
     jsonRPC('tools/list', {}),
     params({ mcp_method: 'tools/list' }, sessionHeaders(sessionId)),
@@ -103,7 +101,7 @@ export function listAllTools() {
 
 export function callTool(name, args) {
   const { sessionId } = initializeSession();
-  const response = tracedHTTP.post(
+  const response = http.post(
     BASE_URL,
     jsonRPC('tools/call', { name, arguments: args }),
     params({ mcp_method: 'tools/call', tool_name: name }, sessionHeaders(sessionId)),

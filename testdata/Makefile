@@ -1,5 +1,11 @@
 SHELL=/usr/bin/env sh
 
+.PHONY: all
+all: hello-world
+
+.PHONY: test
+test: hello-world
+
 # @ name: Hello World
 # @ description: Prints a friendly greeting to stdout. Useful for verifying the MCP server is running correctly.
 # @ risk: low
@@ -15,6 +21,7 @@ hello-world:
 # @ param: none
 # @ output: Confirmation that artifacts were removed
 # @ output-type: text/plain
+.PHONY: clean
 clean:
 	@rm -rf ./bin ./dist
 	@echo "Build artifacts removed."

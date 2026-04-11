@@ -8,8 +8,7 @@ SHELL=/usr/bin/env bash
 _tee-log = > >(tee -a "$(_LOG_DIR)/$(1).log") 2> >(tee -a "$(_LOG_DIR)/$(1).log" >&2)
 
 # OTel env vars forwarded to the integration containers.
-_K6_OTEL_ENV := K6_OUT=$(K6_OUT) \
-	K6_OTEL_GRPC_EXPORTER_ENDPOINT=$(K6_OTEL_GRPC_EXPORTER_ENDPOINT) \
+_K6_OTEL_ENV := K6_OTEL_GRPC_EXPORTER_ENDPOINT=$(K6_OTEL_GRPC_EXPORTER_ENDPOINT) \
 	K6_OTEL_GRPC_EXPORTER_INSECURE=$(K6_OTEL_GRPC_EXPORTER_INSECURE) \
 	K6_OTEL_SERVICE_NAME=$(K6_OTEL_SERVICE_NAME)
 
@@ -32,18 +31,25 @@ _INTEGRATION_RUN_ENV = \
 # Dev setup
 # ---------------------------------------------------------------------------
 
-# Sets up Grafana LGTM versions, configures a symlink so GEMINI.md can read
-# the AGENTS.md file, and installs a git pre-commit hook that runs lint and
-# unit tests before each commit.
-.PHONY: setup
-setup:
+# Writes compose_versions and creates GEMINI.md symlink.
+.PHONY: setup-env
+setup-env:
 	printf "LGTM_VERSION=$(LGTM_VERSION)" > "$(DEV_DIR)/compose_versions"
 	ln -sf AGENTS.md GEMINI.md
 	npm install
+
+# Installs git pre-commit and commit-msg hooks.
+.PHONY: setup-hooks
+setup-hooks:
 	printf '#!/usr/bin/env sh\nmake pre-commit\n' > .git/hooks/pre-commit
 	chmod +x .git/hooks/pre-commit
 	printf '#!/usr/bin/env sh\nnpx --no -- commitlint --edit "$$1"\n' > .git/hooks/commit-msg
 	chmod +x .git/hooks/commit-msg
+
+# Sets up Grafana LGTM versions, configures a symlink so GEMINI.md can read
+# the AGENTS.md file, and installs git hooks for pre-commit and commit-msg.
+.PHONY: setup
+setup: setup-env setup-hooks
 
 # Starts only the LGTM stack (without the Grafana MCP sidecar).
 .PHONY: dev-up-lgtm

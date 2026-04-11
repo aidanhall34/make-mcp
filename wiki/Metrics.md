@@ -101,3 +101,6 @@ override with `OTEL_EXPORTER_PROMETHEUS_HOST` and `OTEL_EXPORTER_PROMETHEUS_PORT
 | Description | — |
 | Unit | — |
 | Labels | `transport` |
+
+A dashboard using the metrics can be found at `./dev/dashboards/`.\
+![make-mcp key metrics dashboard panels](./images/make-mcp-development-panels.png)

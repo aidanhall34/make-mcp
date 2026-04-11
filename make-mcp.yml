@@ -27,6 +27,11 @@ transport: "stdio"
 # Default: "127.0.0.1:9378"
 listen: "127.0.0.1:9378"
 
+# log_path: destination for JSON logs.
+# One of: stderr, or a file path.
+# Default: "stderr"
+log_path: "dev/logs/make-mcp-server.log"
+
 # timeouts: per-risk execution timeouts for tool invocations.
 # Default: 10m for all risk levels.
 timeouts:

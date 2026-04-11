@@ -28,14 +28,14 @@ ACT_CONCURRENT_JOBS ?= 2
 DEV_COMPOSE_PROJECT ?= make-mcp-dev
 _K6_SCRIPT_SLUG := $(shell printf '%s' "$(notdir $(K6_SCRIPT))" | tr '[:upper:]' '[:lower:]' | tr -cs '[:alnum:]' '-')
 INTEGRATION_COMPOSE_PROJECT ?= make-mcp-integration-$(_K6_SCRIPT_SLUG)-$(_GIT_SHA)
-K6_OUT ?= experimental-opentelemetry
-K6_OTEL_GRPC_EXPORTER_ENDPOINT ?= host.docker.internal:4317
+K6_OTEL_GRPC_EXPORTER_ENDPOINT ?=
 K6_OTEL_GRPC_EXPORTER_INSECURE ?= true
 K6_OTEL_SERVICE_NAME ?= make-mcp-integration
 OTEL_TRACES_EXPORTER ?= otlp
 OTEL_METRICS_EXPORTER ?= otlp
+OTEL_EXPORTER_OTLP_ENDPOINT ?= http://host.docker.internal:4317
 OTEL_EXPORTER_OTLP_INSECURE ?= true
-OTEL_SERVICE_NAME ?= make-mcp-integration-server
+OTEL_SERVICE_NAME ?= make-mcp-server
 OTEL_METRIC_EXPORT_INTERVAL ?= 2000
 _DEV_LGTM_COMPOSE := -f "$(DEV_DIR)/docker-compose.lgtm.yml"
 _DEV_GRAFANA_MCP_COMPOSE := -f "$(DEV_DIR)/docker-compose.grafana-mcp.yml"
@@ -49,6 +49,13 @@ _DEV_COMPOSE_ENV := COMPOSE_PROJECT_NAME="$(DEV_COMPOSE_PROJECT)"
 _INTEGRATION_COMPOSE_ENV := COMPOSE_PROJECT_NAME="$(INTEGRATION_COMPOSE_PROJECT)"
 _INTEGRATION_OTEL_COMPOSE := $(_INTEGRATION_STACK_COMPOSE) $(_INTEGRATION_TELEMETRY_COMPOSE)
 
+.PHONY: all
+all: build
+
+.PHONY: test
+test: tests
+
+.PHONY: clean
 # @ name: Clean
 # @ description: Removes all build artifacts, logs, temporary files, and node modules.
 # @ risk: medium
@@ -66,8 +73,9 @@ clean:
 	rm -rf "$(DEV_DIR)/tmp"
 	go clean -testcache
 
+.PHONY: tests
 # @ name: All Go lang tests
-# @ description: Runs all Go unit and benchmark tests with race detection and coverage enabled. Each package enforces its own coverage threshold via TestMain and emits per-file JSON coverage to stderr.
+# @ description: Runs all Go unit and benchmark tests with race detection and coverage enabled. Each package enforces its own coverage threshold via TestMain and emits per-file JSON coverage to stderr. RUN ON EVERY CHANGE TO .go files
 # @ risk: low
 # @ read-only: true
 # @ destructive: false
@@ -216,6 +224,31 @@ lint-dockerfile:
 	} $(call _tee-log,lint-dockerfile) ; \
 	wait
 
+.PHONY: lint-makefile
+# @ name: Lint Makefile
+# @ description: Lints all Makefiles in the repository with checkmake running in a Docker container. Fails if any rule violations are found.
+# @ risk: low
+# @ read-only: true
+# @ destructive: false
+# @ idempotent: true
+# @ open-world: true
+# @ param: none
+# @ output: checkmake lint results
+# @ output-type: text/plain
+lint-makefile:
+	@mkdir -p "$(_LOG_DIR)"
+	@{ \
+		for f in makefile testdata/Makefile ; do \
+			docker run --rm \
+				--entrypoint="" \
+				-v "$(CURDIR):/workspace" \
+				-w "/workspace" \
+				mrtazz/checkmake@sha256:eb6919b20b22d1701a976856e4a224627df0a74b118246101fb6cf5c2e03049f \
+				/checkmake "$$f" ; \
+		done ; \
+	} $(call _tee-log,lint-makefile) ; \
+	wait
+
 # @ name: Scan Secrets
 # @ description: Scans the repository for secrets using TruffleHog in a Docker container.
 # @ risk: low
@@ -280,8 +313,9 @@ scan-test-container:
 		$(call _tee-log,scan-test-container) ; \
 	wait
 
+.PHONY: lint
 # @ name: Lint
-# @ description: Runs repository linting and validation checks required by CI.
+# @ description: Runs repository linting and validation checks required by CI. RUN AFTER ALL FILE CHANGES
 # @ risk: low
 # @ read-only: true
 # @ destructive: false
@@ -290,7 +324,7 @@ scan-test-container:
 # @ param: none
 # @ output: Lint and validation results
 # @ output-type: text/plain
-lint: lint-dockerfile lint-go lint-markdown lint-tidy validate
+lint: lint-dockerfile lint-makefile lint-go lint-markdown lint-tidy validate
 
 # @ name: Build
 # @ description: Compiles all binaries and builds all containers
@@ -302,6 +336,7 @@ lint: lint-dockerfile lint-go lint-markdown lint-tidy validate
 # @ param: none
 # @ output: Binaries at ./bin/
 # @ output-type: application/octet-stream
+.PHONY: build
 build: tests build-validator build-mcp-server integration-build-k6 build-container build-test-container
 
 .PHONY: generate-wiki-sidebar

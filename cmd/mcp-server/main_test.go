@@ -551,15 +551,59 @@ func TestRun_TelemetryInitError(t *testing.T) {
 	}
 }
 
-func TestRun_InvalidConfigFile(t *testing.T) {
-	f, err := os.CreateTemp(t.TempDir(), "*.yml")
-	if err != nil {
-		t.Fatal(err)
+func TestRun_LogPathStdinError(t *testing.T) {
+	if err := run([]string{
+		"--makefile", "../../testdata/Makefile",
+		"--log-path", "stdin",
+	}); err == nil {
+		t.Error("expected error for logging to stdin, got nil")
+	} else if !strings.Contains(err.Error(), "cannot log to stdin") {
+		t.Errorf("expected error message to contain 'cannot log to stdin', got %v", err)
 	}
-	f.WriteString(": invalid: yaml: [[[")
-	f.Close()
+}
 
-	if err := run([]string{"--config", f.Name()}); err == nil {
-		t.Error("expected error for invalid config file, got nil")
+func TestRun_LogPathStdoutError(t *testing.T) {
+	if err := run([]string{
+		"--makefile", "../../testdata/Makefile",
+		"--log-path", "stdout",
+	}); err == nil {
+		t.Error("expected error for logging to stdout, got nil")
+	} else if !strings.Contains(err.Error(), "cannot log to stdout") {
+		t.Errorf("expected error message to contain 'cannot log to stdout', got %v", err)
+	}
+}
+
+func TestRun_LogPathFile(t *testing.T) {
+	t.Setenv("OTEL_TRACES_EXPORTER", "none")
+	t.Setenv("OTEL_METRICS_EXPORTER", "none")
+
+	logFile := filepath.Join(t.TempDir(), "test.log")
+
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("os.Pipe(): %v", err)
+	}
+	w.Close()
+	oldStdin := os.Stdin
+	os.Stdin = r
+	t.Cleanup(func() {
+		os.Stdin = oldStdin
+		r.Close()
+	})
+
+	if err := run([]string{
+		"--makefile", "../../testdata/Makefile",
+		"--transport", "stdio",
+		"--log-path", logFile,
+	}); err != nil {
+		t.Errorf("run(log-path=file) = %v, want nil", err)
+	}
+
+	content, err := os.ReadFile(logFile)
+	if err != nil {
+		t.Fatalf("failed to read log file: %v", err)
+	}
+	if !strings.Contains(string(content), "server started") {
+		t.Errorf("log content missing 'server started': %q", string(content))
 	}
 }

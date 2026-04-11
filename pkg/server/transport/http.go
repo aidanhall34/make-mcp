@@ -5,9 +5,12 @@ import (
 	"net/http"
 
 	rootserver "github.com/aidanhall34/make-mcp/pkg/server"
+	"github.com/aidanhall34/make-mcp/pkg/telemetry"
 	mcpserver "github.com/mark3labs/mcp-go/server"
 	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/propagation"
+	"go.opentelemetry.io/otel/trace"
 )
 
 // HTTPServer serves streamable HTTP MCP plus health endpoints.
@@ -46,6 +49,14 @@ func NewHTTPServer(toolServer *rootserver.ToolServer, addr string) *HTTPServer {
 func propagateTraceContext(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx := otel.GetTextMapPropagator().Extract(r.Context(), propagation.HeaderCarrier(r.Header))
+		ctx, span := telemetry.Tracer().Start(ctx, "mcp.http.request",
+			trace.WithSpanKind(trace.SpanKindServer),
+			trace.WithAttributes(
+				attribute.String("http.method", r.Method),
+				attribute.String("http.route", "/mcp"),
+			),
+		)
+		defer span.End()
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }

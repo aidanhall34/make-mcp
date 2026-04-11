@@ -198,6 +198,23 @@ func TestMerge_BasePreservedWhenOverrideEmpty(t *testing.T) {
 	}
 }
 
+func TestLoadFile_UnknownKey(t *testing.T) {
+	content := `delimiter: "##"
+unknown_field: oops
+`
+	f, err := os.CreateTemp(t.TempDir(), "make-mcp-*.yml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.WriteString(content)
+	f.Close()
+
+	_, err = config.LoadFile(f.Name())
+	if err == nil {
+		t.Error("expected error for unknown key, got nil")
+	}
+}
+
 func TestMerge_DoesNotMutateBase(t *testing.T) {
 	base := config.Config{Delimiter: "@", Makefiles: []string{"./a"}}
 	override := config.Config{Delimiter: "##"}

@@ -5,7 +5,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"log"
+	"log/slog"
 	"os"
 	"os/signal"
 	"strings"
@@ -45,6 +45,7 @@ func run(args []string) error {
 		makefiles  stringSlice
 		transportf string
 		listen     string
+		logPath    string
 		strict     bool
 	)
 
@@ -53,6 +54,7 @@ func run(args []string) error {
 	fs.Var(&makefiles, "makefile", "Makefile path to parse; may be repeated")
 	fs.StringVar(&transportf, "transport", "", "transport to enable: stdio, http, or both")
 	fs.StringVar(&listen, "listen", "", "HTTP listen address")
+	fs.StringVar(&logPath, "log-path", "", "destination for JSON logs (e.g. stderr, or a file path)")
 	fs.BoolVar(&strict, "strict", false, "require every supported recipe annotation, including optional MCP tool hints")
 
 	if err := fs.Parse(args); err != nil {
@@ -67,6 +69,7 @@ func run(args []string) error {
 		Makefiles: []string(makefiles),
 		Transport: transportf,
 		Listen:    listen,
+		LogPath:   logPath,
 		Strict:    strict,
 	}
 	cfg, err := loadConfig(configPath, cliOverride)
@@ -80,6 +83,27 @@ func run(args []string) error {
 		return fmt.Errorf("unsupported transport %q", cfg.Transport)
 	}
 
+	// Setup logging
+	if cfg.LogPath == "stdin" || cfg.LogPath == "stdout" {
+		return fmt.Errorf("misconfiguration: cannot log to %s; please specify 'stderr' or a file path", cfg.LogPath)
+	}
+
+	var logWriter *os.File
+	switch cfg.LogPath {
+	case "stderr", "":
+		logWriter = os.Stderr
+	default:
+		f, err := os.OpenFile(cfg.LogPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+		if err != nil {
+			return fmt.Errorf("failed to open log file %q: %w", cfg.LogPath, err)
+		}
+		defer f.Close()
+		logWriter = f
+	}
+
+	logger := slog.New(slog.NewJSONHandler(logWriter, nil))
+	slog.SetDefault(logger)
+
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
@@ -89,7 +113,7 @@ func run(args []string) error {
 	}
 	defer func() {
 		if err := shutdown(context.Background()); err != nil {
-			log.Printf("telemetry shutdown: %v", err)
+			slog.Error("telemetry shutdown", "error", err)
 		}
 	}()
 
@@ -141,6 +165,8 @@ func run(args []string) error {
 		}()
 	}
 
+	slog.Info("server started", "transport", cfg.Transport, "makefiles", cfg.Makefiles)
+
 	select {
 	case <-ctx.Done():
 		if httpServer != nil {
@@ -176,20 +202,23 @@ func watchLoop(ctx context.Context, fileWatcher *watcher.Watcher, cfg *config.Co
 			if !ok {
 				return
 			}
-			log.Printf("watch error: %v", err)
+			slog.Error("watch error", "error", err)
 		case event, ok := <-fileWatcher.Events():
 			if !ok {
 				return
 			}
+			slog.Info("file change detected", "path", event.Path)
+
 			nextCfg := *cfg
 			if configPath != "" && event.Path == configPath {
 				reloaded, err := loadConfig(configPath, config.Config{})
 				if err != nil {
-					log.Printf("reload config: %v", err)
+					slog.Error("reload config failed", "path", event.Path, "error", err)
 					telemetry.RecordToolReload(ctx, event.Path, telemetry.StatusFailure)
 					continue
 				}
 				nextCfg = config.Merge(reloaded, cliOverride)
+				slog.Info("config reloaded", "path", event.Path)
 			}
 
 			result, err := parser.ParseMakefiles(nextCfg.Makefiles, parser.ParseOptions{
@@ -197,20 +226,22 @@ func watchLoop(ctx context.Context, fileWatcher *watcher.Watcher, cfg *config.Co
 				Strict:    nextCfg.Strict,
 			})
 			if err != nil {
-				log.Printf("reload parse: %v", err)
+				slog.Error("reload parse failed", "path", event.Path, "error", err)
 				telemetry.RecordToolReload(ctx, event.Path, telemetry.StatusFailure)
 				continue
 			}
 			if !result.Valid() {
-				log.Printf("reload failed: %v", formatValidationError(result.Errors))
+				err := formatValidationError(result.Errors)
+				slog.Error("reload validation failed", "path", event.Path, "error", err)
 				telemetry.RecordToolReload(ctx, event.Path, telemetry.StatusFailure)
 				continue
 			}
 			if err := server.Reload(ctx, result.Recipes, event.Path); err != nil {
-				log.Printf("reload failed: %v", err)
+				slog.Error("server reload failed", "path", event.Path, "error", err)
 				continue
 			}
 			*cfg = nextCfg
+			slog.Info("server reloaded successfully", "path", event.Path)
 		}
 	}
 }

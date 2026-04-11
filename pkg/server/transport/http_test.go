@@ -14,6 +14,7 @@ import (
 	rootserver "github.com/aidanhall34/make-mcp/pkg/server"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/propagation"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/trace"
 )
 
@@ -118,11 +119,17 @@ func TestHTTPServer_Start(t *testing.T) {
 }
 
 func TestPropagateTraceContext_ExtractsTraceparent(t *testing.T) {
-	previous := otel.GetTextMapPropagator()
+	// A real tracer provider is required: the no-op provider returns an invalid
+	// span context, which would make the child span appear invalid even though
+	// propagation succeeded.
+	tp := sdktrace.NewTracerProvider(sdktrace.WithSampler(sdktrace.AlwaysSample()))
+	prevTP := otel.GetTracerProvider()
+	otel.SetTracerProvider(tp)
+	t.Cleanup(func() { otel.SetTracerProvider(prevTP) })
+
+	prevProp := otel.GetTextMapPropagator()
 	otel.SetTextMapPropagator(propagation.TraceContext{})
-	t.Cleanup(func() {
-		otel.SetTextMapPropagator(previous)
-	})
+	t.Cleanup(func() { otel.SetTextMapPropagator(prevProp) })
 
 	var got trace.SpanContext
 	handler := propagateTraceContext(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -140,12 +147,14 @@ func TestPropagateTraceContext_ExtractsTraceparent(t *testing.T) {
 		t.Fatalf("status = %d, want %d", rr.Code, http.StatusNoContent)
 	}
 	if !got.IsValid() {
-		t.Fatal("expected extracted span context to be valid")
+		t.Fatal("expected span context to be valid")
 	}
+	// propagateTraceContext creates a child span: the trace ID must be inherited
+	// from the incoming traceparent, but the span ID is the newly created child's.
 	if got.TraceID().String() != "4bf92f3577b34da6a3ce929d0e0e4736" {
-		t.Errorf("trace id = %s, want %s", got.TraceID(), "4bf92f3577b34da6a3ce929d0e0e4736")
+		t.Errorf("trace id = %s, want 4bf92f3577b34da6a3ce929d0e0e4736", got.TraceID())
 	}
-	if got.SpanID().String() != "00f067aa0ba902b7" {
-		t.Errorf("span id = %s, want %s", got.SpanID(), "00f067aa0ba902b7")
+	if got.SpanID().String() == "00f067aa0ba902b7" {
+		t.Error("span id should be a new child span, not the incoming parent span id")
 	}
 }

@@ -10,7 +10,6 @@ services:
       - ./tmp:/tmp/k6-results
     environment:
       MCP_BASE_URL: "http://make-mcp-server:9378/mcp"
-      K6_OUT: ${K6_OUT:-}
       K6_OTEL_GRPC_EXPORTER_ENDPOINT: ${K6_OTEL_GRPC_EXPORTER_ENDPOINT:-}
       K6_OTEL_GRPC_EXPORTER_INSECURE: ${K6_OTEL_GRPC_EXPORTER_INSECURE:-true}
       K6_OTEL_SERVICE_NAME: ${K6_OTEL_SERVICE_NAME:-make-mcp-integration}

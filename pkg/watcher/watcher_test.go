@@ -253,6 +253,93 @@ func TestLoop_ErrorForwarded(t *testing.T) {
 	<-done
 }
 
+func TestFlush_FullChannel(t *testing.T) {
+	w := &Watcher{
+		settle:  10 * time.Millisecond,
+		events:  make(chan Event, 1), // small buffer
+		pending: map[string]time.Time{},
+	}
+	path1 := filepath.Clean("/tmp/f1")
+	path2 := filepath.Clean("/tmp/f2")
+	now := time.Now()
+	w.pending[path1] = now.Add(-time.Second) // ready
+	w.pending[path2] = now.Add(-time.Second) // ready
+
+	// Fill the buffer with one event
+	w.flush()
+
+	// One should be in events, one should be back in pending because buffer was full
+	select {
+	case <-w.events:
+		// good
+	default:
+		t.Fatal("expected one event in channel")
+	}
+
+	w.mu.Lock()
+	if len(w.pending) != 1 {
+		t.Errorf("len(pending) = %d, want 1 (due to full buffer)", len(w.pending))
+	}
+	w.mu.Unlock()
+}
+
+func TestLoop_ReAddWatch(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Clean(filepath.Join(dir, "Makefile"))
+	os.WriteFile(path, []byte(""), 0644)
+
+	w, err := New([]string{path}, 10*time.Millisecond)
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	defer w.Close()
+
+	// Send a Create event to simulate atomic save
+	w.raw.Events <- fsnotify.Event{Name: path, Op: fsnotify.Create}
+
+	select {
+	case event := <-w.events:
+		if event.Path != path {
+			t.Errorf("path = %q, want %q", event.Path, path)
+		}
+	case <-time.After(500 * time.Millisecond):
+		t.Fatal("timed out waiting for event after re-add")
+	}
+}
+
+func TestFlush_MultipleFiles(t *testing.T) {
+	w := &Watcher{
+		settle:  20 * time.Millisecond,
+		events:  make(chan Event, 10),
+		pending: map[string]time.Time{},
+	}
+	now := time.Now()
+	path1 := filepath.Clean("/tmp/a")
+	path2 := filepath.Clean("/tmp/b")
+
+	w.pending[path1] = now.Add(-time.Second) // ready
+	w.pending[path2] = now.Add(time.Second)  // not ready
+
+	w.flush()
+
+	// path1 should be sent
+	select {
+	case event := <-w.events:
+		if event.Path != path1 {
+			t.Errorf("got %q, want %q", event.Path, path1)
+		}
+	default:
+		t.Fatal("expected event for path1")
+	}
+
+	// path2 should still be pending
+	w.mu.Lock()
+	if _, ok := w.pending[path2]; !ok {
+		t.Error("path2 should still be pending")
+	}
+	w.mu.Unlock()
+}
+
 func TestFlush_RescheduleWithTimer(t *testing.T) {
 	w := &Watcher{
 		settle:  10 * time.Millisecond,

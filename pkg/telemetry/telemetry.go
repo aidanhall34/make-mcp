@@ -107,7 +107,7 @@ func initMetricProvider(ctx context.Context, res *resource.Resource, shutdownFns
 		*shutdownFns = append(*shutdownFns, provider.Shutdown)
 		return nil
 	case "prometheus":
-		promExporter, err := prometheus.New(prometheus.WithNamespace("make_mcp"))
+		promExporter, err := prometheus.New()
 		if err != nil {
 			return fmt.Errorf("create prometheus exporter: %w", err)
 		}

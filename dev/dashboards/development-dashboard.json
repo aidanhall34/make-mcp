@@ -186,7 +186,7 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99,\n  sum(\n    rate(\n      make_mcp_tool_invocation_duration_seconds_bucket{service_name=\"make-mcp\"}[$__rate_interval]\n    )\n  ) by (le, status, tool)\n)",
+          "expr": "histogram_quantile(0.99,\n  sum(\n    rate(\n      make_mcp_tool_invocation_duration_seconds_bucket{service_name=\"make-mcp\", test_type!=\"integration\"}[$__rate_interval]\n    )\n  ) by (le, status, tool)\n)",
           "legendFormat": "99:{{ tool }}:{{status}}",
           "range": true,
           "refId": "A"
@@ -197,7 +197,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.95,\n  sum(\n    rate(\n      make_mcp_tool_invocation_duration_seconds_bucket{service_name=\"make-mcp\"}[$__rate_interval]\n    )\n  ) by (le, status, tool)\n)",
+          "expr": "histogram_quantile(0.95,\n  sum(\n    rate(\n      make_mcp_tool_invocation_duration_seconds_bucket{service_name=\"make-mcp\", test_type!=\"integration\"}[$__rate_interval]\n    )\n  ) by (le, status, tool)\n)",
           "instant": false,
           "legendFormat": "95:{{ tool }}:{{status}}",
           "range": true,
@@ -209,7 +209,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.5,\n  sum(\n    rate(\n      make_mcp_tool_invocation_duration_seconds_bucket{service_name=\"make-mcp\"}[$__rate_interval]\n    )\n  ) by (le, status, tool)\n)",
+          "expr": "histogram_quantile(0.5,\n  sum(\n    rate(\n      make_mcp_tool_invocation_duration_seconds_bucket{service_name=\"make-mcp\", test_type!=\"integration\"}[$__rate_interval]\n    )\n  ) by (le, status, tool)\n)",
           "instant": false,
           "legendFormat": "50:{{ tool }}:{{status}}",
           "range": true,
@@ -224,10 +224,26 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
+      "description": "Over range",
       "fieldConfig": {
         "defaults": {
           "color": {
             "mode": "thresholds"
+          },
+          "custom": {
+            "align": "left",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "filterable": true,
+            "footer": {
+              "reducers": [
+                "sum"
+              ]
+            },
+            "inspect": false,
+            "wrapHeaderText": true,
+            "wrapText": true
           },
           "mappings": [],
           "min": 0,
@@ -256,34 +272,42 @@
       },
       "id": 55,
       "options": {
-        "colorMode": "value",
-        "graphMode": "area",
-        "justifyMode": "center",
-        "orientation": "auto",
-        "percentChangeColorMode": "standard",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "showPercentChange": false,
-        "textMode": "value_and_name",
-        "wideLayout": false
+        "cellHeight": "sm",
+        "showHeader": true
       },
       "pluginVersion": "12.4.2",
       "targets": [
         {
           "editorMode": "code",
-          "expr": "sum(\n  increase(\n      make_mcp_tool_invocation_duration_seconds_count{service_name=\"make-mcp\"}[$__range]\n  )\n) by (le, tool, status) + 1",
+          "exemplar": false,
+          "expr": "sum(\n  increase(\n      make_mcp_tool_invocation_duration_seconds_count{service_name=\"make-mcp\", test_type!=\"integration\"}[$__range]\n  )\n) by (le, tool, status) + 1",
+          "format": "table",
+          "instant": true,
           "legendFormat": "__auto",
-          "range": true,
+          "range": false,
           "refId": "A"
         }
       ],
       "title": "Tool invocations",
-      "type": "stat"
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true
+            },
+            "includeByName": {},
+            "indexByName": {
+              "Time": 0,
+              "Value": 3,
+              "status": 2,
+              "tool": 1
+            },
+            "renameByName": {}
+          }
+        }
+      ],
+      "type": "table"
     },
     {
       "datasource": {
@@ -372,7 +396,7 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "sum(increase(make_mcp_tool_reload_total{service_name=\"make-mcp\"}[$__rate_interval])) by (status, file)",
+          "expr": "sum(increase(make_mcp_tool_reload_total{service_name=\"make-mcp\", test_type!=\"integration\"}[$__rate_interval])) by (status, file)",
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
@@ -386,6 +410,7 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
+      "description": "Over range",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -438,7 +463,7 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "sum(\n  increase(\n    make_mcp_tool_reload_total{service_name=\"make-mcp\"}[$__range]\n    )\n  ) by (status)",
+          "expr": "sum(increase(make_mcp_tool_reload_total{service_name=\"make-mcp\", test_type!=\"integration\"}[$__range])) by (status) + 1",
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
@@ -537,7 +562,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum(rate(make_mcp_tools_list_request_latency_seconds_bucket{}[$__rate_interval])) by (le, status))",
+          "expr": "histogram_quantile(0.99, sum(rate(make_mcp_tools_list_request_latency_seconds_bucket{test_type!=\"integration\"}[$__rate_interval])) by (le, status))",
           "instant": false,
           "legendFormat": "99:{{ status }}",
           "range": true,
@@ -545,7 +570,7 @@
         },
         {
           "editorMode": "code",
-          "expr": "histogram_quantile(0.95, sum(rate(make_mcp_tools_list_request_latency_seconds_bucket{}[$__rate_interval])) by (le, status))",
+          "expr": "histogram_quantile(0.95, sum(rate(make_mcp_tools_list_request_latency_seconds_bucket{test_type!=\"integration\"}[$__rate_interval])) by (le, status))",
           "legendFormat": "95:{{ status }}",
           "range": true,
           "refId": "A"
@@ -556,7 +581,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.50, sum(rate(make_mcp_tools_list_request_latency_seconds_bucket{}[$__rate_interval])) by (le, status))",
+          "expr": "histogram_quantile(0.50, sum(rate(make_mcp_tools_list_request_latency_seconds_bucket{test_type!=\"integration\"}[$__rate_interval])) by (le, status))",
           "instant": false,
           "legendFormat": "50:{{ status }}",
           "range": true,
@@ -571,6 +596,7 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
+      "description": "Active connections",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -620,7 +646,7 @@
         {
           "editorMode": "code",
           "exemplar": false,
-          "expr": "sum(make_mcp_connected_clients{service_name=\"make-mcp\"}) by (transport, instance)",
+          "expr": "sum(make_mcp_connected_clients{service_name=\"make-mcp\", test_type!~\".+\"}) by (transport, instance)",
           "instant": true,
           "legendFormat": "__auto",
           "range": false,
@@ -631,88 +657,74 @@
       "type": "stat"
     },
     {
-      "collapsed": false,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "showValues": false,
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "bytes"
+        },
+        "overrides": []
+      },
       "gridPos": {
-        "h": 1,
-        "w": 24,
+        "h": 8,
+        "w": 12,
         "x": 0,
         "y": 35
       },
-      "id": 68,
-      "panels": [],
-      "title": "Gemini",
-      "type": "row"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "barWidthFactor": 0.6,
-            "drawStyle": "line",
-            "fillOpacity": 0,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "auto",
-            "showValues": false,
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "mappings": [],
-          "min": 0,
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": 0
-              },
-              {
-                "color": "red",
-                "value": 80
-              }
-            ]
-          },
-          "unit": "Tokens p/s"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 10,
-        "w": 8,
-        "x": 0,
-        "y": 36
-      },
-      "id": 69,
+      "id": 78,
       "options": {
         "legend": {
           "calcs": [],
@@ -730,197 +742,8 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "sum(\n    rate(\n        gemini_cli_token_usage_total{}[$__rate_interval]\n    )\n) by (model, type)",
-          "legendFormat": "__auto",
-          "range": true,
-          "refId": "A"
-        }
-      ],
-      "title": "Tokens consumed per second",
-      "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "barWidthFactor": 0.6,
-            "drawStyle": "line",
-            "fillOpacity": 0,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "auto",
-            "showValues": false,
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": 0
-              },
-              {
-                "color": "red",
-                "value": 80
-              }
-            ]
-          }
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 10,
-        "w": 6,
-        "x": 8,
-        "y": 36
-      },
-      "id": 73,
-      "options": {
-        "legend": {
-          "calcs": [],
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "hideZeros": false,
-          "mode": "single",
-          "sort": "none"
-        }
-      },
-      "pluginVersion": "12.4.2",
-      "targets": [
-        {
-          "editorMode": "code",
-          "expr": "sum(rate(gemini_cli_tool_call_latency_milliseconds_count[$__rate_interval])) by (function_name)",
-          "legendFormat": "__auto",
-          "range": true,
-          "refId": "A"
-        }
-      ],
-      "title": "Tool Usage Throughput",
-      "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "barWidthFactor": 0.6,
-            "drawStyle": "line",
-            "fillOpacity": 0,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "auto",
-            "showValues": false,
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": 0
-              },
-              {
-                "color": "red",
-                "value": 80
-              }
-            ]
-          },
-          "unit": "s"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 10,
-        "w": 5,
-        "x": 14,
-        "y": 36
-      },
-      "id": 70,
-      "options": {
-        "legend": {
-          "calcs": [],
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "hideZeros": false,
-          "mode": "single",
-          "sort": "none"
-        }
-      },
-      "pluginVersion": "12.4.2",
-      "targets": [
-        {
-          "editorMode": "code",
-          "expr": "histogram_quantile(0.99,\n    sum(\n        rate(\n            gemini_cli_api_request_latency_milliseconds_bucket[$__rate_interval]\n        )\n    ) by (le, model)\n) / 1000",
-          "legendFormat": "99:{{ model }}",
+          "expr": "sum(rate(make_mcp_tool_invocation_bytes_in_sum{test_type!=\"integration\"}[$__rate_interval])) by (tool)",
+          "legendFormat": "rx:{{ tool }}",
           "range": true,
           "refId": "A"
         },
@@ -930,26 +753,14 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.95,\n    sum(\n        rate(\n            gemini_cli_api_request_latency_milliseconds_bucket[$__rate_interval]\n        )\n    ) by (le, model)\n) / 1000",
+          "expr": "sum(rate(make_mcp_tool_invocation_bytes_out_sum{test_type!=\"integration\"}[$__rate_interval])) by (tool)",
           "instant": false,
-          "legendFormat": "95:{{ model }}",
+          "legendFormat": "tx:{{ tool }}",
           "range": true,
           "refId": "B"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "editorMode": "code",
-          "expr": "histogram_quantile(0.5,\n    sum(\n        rate(\n            gemini_cli_api_request_latency_milliseconds_bucket[$__rate_interval]\n        )\n    ) by (le, model)\n) / 1000",
-          "instant": false,
-          "legendFormat": "50:{{ model }}",
-          "range": true,
-          "refId": "C"
         }
       ],
-      "title": "Gemini API request latency",
+      "title": "Tool invocation bytes",
       "type": "timeseries"
     },
     {
@@ -1009,17 +820,18 @@
                 "value": 80
               }
             ]
-          }
+          },
+          "unit": "bytes"
         },
         "overrides": []
       },
       "gridPos": {
-        "h": 10,
-        "w": 5,
-        "x": 19,
-        "y": 36
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 35
       },
-      "id": 71,
+      "id": 79,
       "options": {
         "legend": {
           "calcs": [],
@@ -1037,392 +849,26 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "sum(rate(gemini_cli_api_request_latency_milliseconds_count[$__rate_interval])) by (model)",
-          "legendFormat": "__auto",
+          "expr": "sum(rate(make_mcp_tools_list_request_bytes_in_sum{test_type!=\"integration\"}[$__rate_interval])) by (status)",
+          "legendFormat": "rx:{{ status }}",
           "range": true,
           "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum(rate(make_mcp_tools_list_request_bytes_out_sum{test_type!=\"integration\"}[$__rate_interval])) by (status)",
+          "instant": false,
+          "legendFormat": "tx:{{ status }}",
+          "range": true,
+          "refId": "B"
         }
       ],
-      "title": "API request throughput",
+      "title": "Tool list bytes",
       "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "description": "0: No tokens used in range",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "custom": {
-            "align": "left",
-            "cellOptions": {
-              "type": "auto"
-            },
-            "filterable": true,
-            "footer": {
-              "reducers": []
-            },
-            "inspect": false,
-            "wrapHeaderText": true,
-            "wrapText": false
-          },
-          "mappings": [
-            {
-              "options": {
-                "NaN": {
-                  "index": 0,
-                  "text": "0"
-                }
-              },
-              "type": "value"
-            }
-          ],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": 0
-              }
-            ]
-          },
-          "unit": "percentunit"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 10,
-        "w": 8,
-        "x": 0,
-        "y": 46
-      },
-      "id": 72,
-      "options": {
-        "cellHeight": "sm",
-        "showHeader": true,
-        "sortBy": [
-          {
-            "desc": true,
-            "displayName": "model"
-          }
-        ]
-      },
-      "pluginVersion": "12.4.2",
-      "targets": [
-        {
-          "editorMode": "code",
-          "exemplar": false,
-          "expr": "sum(increase(gemini_cli_token_usage_total{}[$__range])) by (model, type) / on(model) group_left() sum(increase(gemini_cli_token_usage_total{}[$__range])) by (model)",
-          "format": "table",
-          "instant": true,
-          "legendFormat": "__auto",
-          "range": false,
-          "refId": "A"
-        }
-      ],
-      "title": "Token type usage",
-      "transformations": [
-        {
-          "id": "organize",
-          "options": {
-            "excludeByName": {
-              "Time": true
-            },
-            "includeByName": {},
-            "indexByName": {},
-            "renameByName": {}
-          }
-        }
-      ],
-      "type": "table"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "description": "In range\nGets the increase in count of operations by mime type and operation. This is a weird metric to use",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "custom": {
-            "align": "auto",
-            "cellOptions": {
-              "type": "auto"
-            },
-            "footer": {
-              "reducers": []
-            },
-            "inspect": false
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": 0
-              },
-              {
-                "color": "red",
-                "value": 80
-              }
-            ]
-          }
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 10,
-        "w": 10,
-        "x": 8,
-        "y": 46
-      },
-      "id": 75,
-      "options": {
-        "cellHeight": "sm",
-        "showHeader": true
-      },
-      "pluginVersion": "12.4.2",
-      "targets": [
-        {
-          "editorMode": "code",
-          "exemplar": false,
-          "expr": "increase(\n    count(gemini_cli_file_operation_count_total{}) by (operation, mimetype)[$__range:]\n)",
-          "format": "table",
-          "instant": true,
-          "legendFormat": "__auto",
-          "range": false,
-          "refId": "A"
-        }
-      ],
-      "title": "File operations",
-      "transformations": [
-        {
-          "id": "organize",
-          "options": {
-            "excludeByName": {
-              "Time": true,
-              "Value": false
-            },
-            "includeByName": {},
-            "indexByName": {},
-            "renameByName": {}
-          }
-        }
-      ],
-      "type": "table"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "description": "In range",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": 0
-              }
-            ]
-          }
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 10,
-        "w": 6,
-        "x": 18,
-        "y": 46
-      },
-      "id": 74,
-      "options": {
-        "colorMode": "value",
-        "graphMode": "area",
-        "justifyMode": "center",
-        "orientation": "auto",
-        "percentChangeColorMode": "standard",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "showPercentChange": false,
-        "textMode": "value_and_name",
-        "wideLayout": true
-      },
-      "pluginVersion": "12.4.2",
-      "targets": [
-        {
-          "editorMode": "code",
-          "expr": "sum(increase(gemini_cli_lines_changed_total{}[$__range])) by (type)",
-          "legendFormat": "__auto",
-          "range": true,
-          "refId": "A"
-        }
-      ],
-      "title": "Lines changed",
-      "type": "stat"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "custom": {
-            "align": "auto",
-            "cellOptions": {
-              "type": "auto"
-            },
-            "filterable": true,
-            "footer": {
-              "reducers": []
-            },
-            "inspect": false,
-            "wrapHeaderText": true,
-            "wrapText": true
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": 0
-              },
-              {
-                "color": "red",
-                "value": 80
-              }
-            ]
-          }
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 9,
-        "w": 8,
-        "x": 0,
-        "y": 56
-      },
-      "id": 76,
-      "options": {
-        "cellHeight": "sm",
-        "showHeader": true
-      },
-      "pluginVersion": "12.4.2",
-      "targets": [
-        {
-          "editorMode": "code",
-          "exemplar": false,
-          "expr": "sum(increase(gemini_cli_model_routing_latency_milliseconds_count[$__range])) by (routing_approval_mode,routing_reasoning, routing_decision_model, routing_decision_source)",
-          "format": "table",
-          "instant": true,
-          "legendFormat": "__auto",
-          "range": false,
-          "refId": "A"
-        }
-      ],
-      "title": "Routing descions",
-      "transformations": [
-        {
-          "id": "organize",
-          "options": {
-            "excludeByName": {
-              "Time": true
-            },
-            "includeByName": {},
-            "indexByName": {},
-            "renameByName": {}
-          }
-        }
-      ],
-      "type": "table"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": 0
-              },
-              {
-                "color": "red",
-                "value": 80
-              }
-            ]
-          }
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 9,
-        "w": 16,
-        "x": 8,
-        "y": 56
-      },
-      "id": 77,
-      "options": {
-        "colorMode": "value",
-        "graphMode": "area",
-        "justifyMode": "center",
-        "orientation": "auto",
-        "percentChangeColorMode": "standard",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "showPercentChange": false,
-        "textMode": "value_and_name",
-        "wideLayout": false
-      },
-      "pluginVersion": "12.4.2",
-      "targets": [
-        {
-          "editorMode": "code",
-          "expr": "sum(increase(gemini_cli_tool_call_latency_milliseconds_count[$__range])) by (function_name)",
-          "legendFormat": "__auto",
-          "range": true,
-          "refId": "A"
-        }
-      ],
-      "title": "Tools used",
-      "type": "stat"
     },
     {
       "collapsed": true,
@@ -1430,7 +876,802 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 65
+        "y": 43
+      },
+      "id": 68,
+      "panels": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "barWidthFactor": 0.6,
+                "drawStyle": "line",
+                "fillOpacity": 0,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "auto",
+                "showValues": false,
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "min": 0,
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": 0
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              },
+              "unit": "Tokens p/s"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 10,
+            "w": 8,
+            "x": 0,
+            "y": 44
+          },
+          "id": 69,
+          "options": {
+            "legend": {
+              "calcs": [],
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "hideZeros": false,
+              "mode": "single",
+              "sort": "none"
+            }
+          },
+          "pluginVersion": "12.4.2",
+          "targets": [
+            {
+              "editorMode": "code",
+              "expr": "sum(\n    rate(\n        gemini_cli_token_usage_total{}[$__rate_interval]\n    )\n) by (model, type)",
+              "legendFormat": "__auto",
+              "range": true,
+              "refId": "A"
+            }
+          ],
+          "title": "Tokens consumed per second",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "barWidthFactor": 0.6,
+                "drawStyle": "line",
+                "fillOpacity": 0,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "auto",
+                "showValues": false,
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": 0
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 10,
+            "w": 6,
+            "x": 8,
+            "y": 44
+          },
+          "id": 73,
+          "options": {
+            "legend": {
+              "calcs": [],
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "hideZeros": false,
+              "mode": "single",
+              "sort": "none"
+            }
+          },
+          "pluginVersion": "12.4.2",
+          "targets": [
+            {
+              "editorMode": "code",
+              "expr": "sum(rate(gemini_cli_tool_call_latency_milliseconds_count[$__rate_interval])) by (function_name)",
+              "legendFormat": "__auto",
+              "range": true,
+              "refId": "A"
+            }
+          ],
+          "title": "Tool Usage Throughput",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "barWidthFactor": 0.6,
+                "drawStyle": "line",
+                "fillOpacity": 0,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "auto",
+                "showValues": false,
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": 0
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              },
+              "unit": "s"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 10,
+            "w": 5,
+            "x": 14,
+            "y": 44
+          },
+          "id": 70,
+          "options": {
+            "legend": {
+              "calcs": [],
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "hideZeros": false,
+              "mode": "single",
+              "sort": "none"
+            }
+          },
+          "pluginVersion": "12.4.2",
+          "targets": [
+            {
+              "editorMode": "code",
+              "expr": "histogram_quantile(0.99,\n    sum(\n        rate(\n            gemini_cli_api_request_latency_milliseconds_bucket[$__rate_interval]\n        )\n    ) by (le, model)\n) / 1000",
+              "legendFormat": "99:{{ model }}",
+              "range": true,
+              "refId": "A"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "editorMode": "code",
+              "expr": "histogram_quantile(0.95,\n    sum(\n        rate(\n            gemini_cli_api_request_latency_milliseconds_bucket[$__rate_interval]\n        )\n    ) by (le, model)\n) / 1000",
+              "instant": false,
+              "legendFormat": "95:{{ model }}",
+              "range": true,
+              "refId": "B"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "editorMode": "code",
+              "expr": "histogram_quantile(0.5,\n    sum(\n        rate(\n            gemini_cli_api_request_latency_milliseconds_bucket[$__rate_interval]\n        )\n    ) by (le, model)\n) / 1000",
+              "instant": false,
+              "legendFormat": "50:{{ model }}",
+              "range": true,
+              "refId": "C"
+            }
+          ],
+          "title": "Gemini API request latency",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "barWidthFactor": 0.6,
+                "drawStyle": "line",
+                "fillOpacity": 0,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "auto",
+                "showValues": false,
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": 0
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 10,
+            "w": 5,
+            "x": 19,
+            "y": 44
+          },
+          "id": 71,
+          "options": {
+            "legend": {
+              "calcs": [],
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "hideZeros": false,
+              "mode": "single",
+              "sort": "none"
+            }
+          },
+          "pluginVersion": "12.4.2",
+          "targets": [
+            {
+              "editorMode": "code",
+              "expr": "sum(rate(gemini_cli_api_request_latency_milliseconds_count[$__rate_interval])) by (model)",
+              "legendFormat": "__auto",
+              "range": true,
+              "refId": "A"
+            }
+          ],
+          "title": "API request throughput",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "description": "0: No tokens used in range",
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "thresholds"
+              },
+              "custom": {
+                "align": "left",
+                "cellOptions": {
+                  "type": "auto"
+                },
+                "filterable": true,
+                "footer": {
+                  "reducers": []
+                },
+                "inspect": false,
+                "wrapHeaderText": true,
+                "wrapText": false
+              },
+              "mappings": [
+                {
+                  "options": {
+                    "NaN": {
+                      "index": 0,
+                      "text": "0"
+                    }
+                  },
+                  "type": "value"
+                }
+              ],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": 0
+                  }
+                ]
+              },
+              "unit": "percentunit"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 10,
+            "w": 8,
+            "x": 0,
+            "y": 54
+          },
+          "id": 72,
+          "options": {
+            "cellHeight": "sm",
+            "showHeader": true,
+            "sortBy": [
+              {
+                "desc": true,
+                "displayName": "model"
+              }
+            ]
+          },
+          "pluginVersion": "12.4.2",
+          "targets": [
+            {
+              "editorMode": "code",
+              "exemplar": false,
+              "expr": "sum(increase(gemini_cli_token_usage_total{}[$__range])) by (model, type) / on(model) group_left() sum(increase(gemini_cli_token_usage_total{}[$__range])) by (model)",
+              "format": "table",
+              "instant": true,
+              "legendFormat": "__auto",
+              "range": false,
+              "refId": "A"
+            }
+          ],
+          "title": "Token type usage",
+          "transformations": [
+            {
+              "id": "organize",
+              "options": {
+                "excludeByName": {
+                  "Time": true
+                },
+                "includeByName": {},
+                "indexByName": {},
+                "renameByName": {}
+              }
+            }
+          ],
+          "type": "table"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "description": "In range\nGets the increase in count of operations by mime type and operation. This is a weird metric to use",
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "thresholds"
+              },
+              "custom": {
+                "align": "auto",
+                "cellOptions": {
+                  "type": "auto"
+                },
+                "footer": {
+                  "reducers": []
+                },
+                "inspect": false
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": 0
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 10,
+            "w": 10,
+            "x": 8,
+            "y": 54
+          },
+          "id": 75,
+          "options": {
+            "cellHeight": "sm",
+            "showHeader": true
+          },
+          "pluginVersion": "12.4.2",
+          "targets": [
+            {
+              "editorMode": "code",
+              "exemplar": false,
+              "expr": "increase(\n    count(gemini_cli_file_operation_count_total{}) by (operation, mimetype)[$__range:]\n)",
+              "format": "table",
+              "instant": true,
+              "legendFormat": "__auto",
+              "range": false,
+              "refId": "A"
+            }
+          ],
+          "title": "File operations",
+          "transformations": [
+            {
+              "id": "organize",
+              "options": {
+                "excludeByName": {
+                  "Time": true,
+                  "Value": false
+                },
+                "includeByName": {},
+                "indexByName": {},
+                "renameByName": {}
+              }
+            }
+          ],
+          "type": "table"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "description": "In range",
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "thresholds"
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": 0
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 10,
+            "w": 6,
+            "x": 18,
+            "y": 54
+          },
+          "id": 74,
+          "options": {
+            "colorMode": "value",
+            "graphMode": "area",
+            "justifyMode": "center",
+            "orientation": "auto",
+            "percentChangeColorMode": "standard",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "showPercentChange": false,
+            "textMode": "value_and_name",
+            "wideLayout": true
+          },
+          "pluginVersion": "12.4.2",
+          "targets": [
+            {
+              "editorMode": "code",
+              "expr": "sum(increase(gemini_cli_lines_changed_total{}[$__range])) by (type)",
+              "legendFormat": "__auto",
+              "range": true,
+              "refId": "A"
+            }
+          ],
+          "title": "Lines changed",
+          "type": "stat"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "thresholds"
+              },
+              "custom": {
+                "align": "auto",
+                "cellOptions": {
+                  "type": "auto"
+                },
+                "filterable": true,
+                "footer": {
+                  "reducers": []
+                },
+                "inspect": false,
+                "wrapHeaderText": true,
+                "wrapText": true
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": 0
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 9,
+            "w": 8,
+            "x": 0,
+            "y": 64
+          },
+          "id": 76,
+          "options": {
+            "cellHeight": "sm",
+            "showHeader": true
+          },
+          "pluginVersion": "12.4.2",
+          "targets": [
+            {
+              "editorMode": "code",
+              "exemplar": false,
+              "expr": "sum(increase(gemini_cli_model_routing_latency_milliseconds_count[$__range])) by (routing_approval_mode,routing_reasoning, routing_decision_model, routing_decision_source)",
+              "format": "table",
+              "instant": true,
+              "legendFormat": "__auto",
+              "range": false,
+              "refId": "A"
+            }
+          ],
+          "title": "Routing descions",
+          "transformations": [
+            {
+              "id": "organize",
+              "options": {
+                "excludeByName": {
+                  "Time": true
+                },
+                "includeByName": {},
+                "indexByName": {},
+                "renameByName": {}
+              }
+            }
+          ],
+          "type": "table"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "thresholds"
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": 0
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 9,
+            "w": 16,
+            "x": 8,
+            "y": 64
+          },
+          "id": 77,
+          "options": {
+            "colorMode": "value",
+            "graphMode": "area",
+            "justifyMode": "center",
+            "orientation": "auto",
+            "percentChangeColorMode": "standard",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "showPercentChange": false,
+            "textMode": "value_and_name",
+            "wideLayout": false
+          },
+          "pluginVersion": "12.4.2",
+          "targets": [
+            {
+              "editorMode": "code",
+              "expr": "sum(increase(gemini_cli_tool_call_latency_milliseconds_count[$__range])) by (function_name)",
+              "legendFormat": "__auto",
+              "range": true,
+              "refId": "A"
+            }
+          ],
+          "title": "Tools used",
+          "type": "stat"
+        }
+      ],
+      "title": "Gemini",
+      "type": "row"
+    },
+    {
+      "collapsed": true,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 44
       },
       "id": 60,
       "panels": [
@@ -1466,7 +1707,7 @@
             "h": 10,
             "w": 6,
             "x": 0,
-            "y": 66
+            "y": 106
           },
           "id": 61,
           "options": {
@@ -1561,7 +1802,7 @@
             "h": 10,
             "w": 6,
             "x": 6,
-            "y": 66
+            "y": 106
           },
           "id": 62,
           "options": {
@@ -1656,7 +1897,7 @@
             "h": 10,
             "w": 6,
             "x": 12,
-            "y": 66
+            "y": 106
           },
           "id": 63,
           "options": {
@@ -1752,7 +1993,7 @@
             "h": 10,
             "w": 6,
             "x": 18,
-            "y": 66
+            "y": 106
           },
           "id": 64,
           "options": {
@@ -1856,7 +2097,7 @@
             "h": 11,
             "w": 12,
             "x": 0,
-            "y": 123
+            "y": 116
           },
           "id": 52,
           "options": {
@@ -1920,7 +2161,7 @@
             "h": 11,
             "w": 6,
             "x": 12,
-            "y": 123
+            "y": 116
           },
           "id": 66,
           "options": {
@@ -2024,7 +2265,7 @@
             "h": 11,
             "w": 6,
             "x": 18,
-            "y": 123
+            "y": 116
           },
           "id": 65,
           "options": {
@@ -2068,7 +2309,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 66
+        "y": 45
       },
       "id": 6,
       "panels": [
@@ -2138,7 +2379,7 @@
             "h": 12,
             "w": 8,
             "x": 0,
-            "y": 67
+            "y": 70
           },
           "id": 4,
           "options": {
@@ -2200,7 +2441,7 @@
             "h": 12,
             "w": 5,
             "x": 8,
-            "y": 67
+            "y": 70
           },
           "id": 1,
           "options": {
@@ -2272,7 +2513,7 @@
             "h": 12,
             "w": 4,
             "x": 13,
-            "y": 67
+            "y": 70
           },
           "id": 2,
           "options": {
@@ -2333,7 +2574,7 @@
             "h": 12,
             "w": 7,
             "x": 17,
-            "y": 67
+            "y": 70
           },
           "id": 7,
           "options": {
@@ -2434,7 +2675,7 @@
             "h": 12,
             "w": 8,
             "x": 0,
-            "y": 79
+            "y": 226
           },
           "id": 51,
           "options": {
@@ -2496,7 +2737,7 @@
             "h": 12,
             "w": 5,
             "x": 8,
-            "y": 79
+            "y": 226
           },
           "id": 50,
           "options": {
@@ -2562,7 +2803,7 @@
             "h": 12,
             "w": 4,
             "x": 13,
-            "y": 79
+            "y": 226
           },
           "id": 5,
           "options": {
@@ -2624,7 +2865,7 @@
             "h": 12,
             "w": 7,
             "x": 17,
-            "y": 79
+            "y": 226
           },
           "id": 3,
           "options": {
@@ -2708,7 +2949,7 @@
             "h": 11,
             "w": 12,
             "x": 0,
-            "y": 91
+            "y": 238
           },
           "id": 67,
           "options": {
@@ -2757,7 +2998,7 @@
             "h": 11,
             "w": 12,
             "x": 12,
-            "y": 91
+            "y": 238
           },
           "id": 8,
           "options": {
@@ -2855,7 +3096,7 @@
             "h": 12,
             "w": 12,
             "x": 0,
-            "y": 102
+            "y": 249
           },
           "id": 46,
           "options": {
@@ -2955,7 +3196,7 @@
             "h": 12,
             "w": 12,
             "x": 12,
-            "y": 102
+            "y": 249
           },
           "id": 47,
           "options": {
@@ -2994,7 +3235,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 67
+        "y": 46
       },
       "id": 21,
       "panels": [
@@ -3064,7 +3305,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 136
+            "y": 359
           },
           "id": 27,
           "options": {
@@ -3130,7 +3371,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 136
+            "y": 359
           },
           "id": 29,
           "options": {
@@ -3234,7 +3475,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 144
+            "y": 367
           },
           "id": 28,
           "options": {
@@ -3296,7 +3537,7 @@
             "h": 8,
             "w": 6,
             "x": 12,
-            "y": 144
+            "y": 367
           },
           "id": 31,
           "options": {
@@ -3362,7 +3603,7 @@
             "h": 8,
             "w": 6,
             "x": 18,
-            "y": 144
+            "y": 367
           },
           "id": 30,
           "options": {
@@ -3400,424 +3641,425 @@
       "type": "row"
     },
     {
-      "collapsed": false,
+      "collapsed": true,
       "gridPos": {
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 68
+        "y": 47
       },
       "id": 20,
-      "panels": [],
+      "panels": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "barWidthFactor": 0.6,
+                "drawStyle": "line",
+                "fillOpacity": 0,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "auto",
+                "showValues": false,
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": 0
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              },
+              "unit": "bytes"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 0,
+            "y": 292
+          },
+          "id": 22,
+          "options": {
+            "legend": {
+              "calcs": [],
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "hideZeros": false,
+              "mode": "single",
+              "sort": "none"
+            }
+          },
+          "pluginVersion": "12.4.2",
+          "targets": [
+            {
+              "editorMode": "code",
+              "expr": "sum(rate(loki_distributor_bytes_received_total[$__rate_interval]))",
+              "legendFormat": "rx",
+              "range": true,
+              "refId": "A"
+            }
+          ],
+          "title": "Bytes in",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "barWidthFactor": 0.6,
+                "drawStyle": "line",
+                "fillOpacity": 0,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "auto",
+                "showValues": false,
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": 0
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              },
+              "unit": "reqps"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 12,
+            "y": 292
+          },
+          "id": 24,
+          "options": {
+            "legend": {
+              "calcs": [],
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "hideZeros": false,
+              "mode": "single",
+              "sort": "none"
+            }
+          },
+          "pluginVersion": "12.4.2",
+          "targets": [
+            {
+              "editorMode": "code",
+              "expr": "sum(rate(loki_ingester_wal_records_logged_total[$__rate_interval]))",
+              "legendFormat": "rx",
+              "range": true,
+              "refId": "A"
+            }
+          ],
+          "title": "Records in",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "barWidthFactor": 0.6,
+                "drawStyle": "line",
+                "fillOpacity": 0,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "auto",
+                "showValues": false,
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": 0
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              },
+              "unit": "bytes"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 0,
+            "y": 300
+          },
+          "id": 23,
+          "options": {
+            "legend": {
+              "calcs": [],
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "hideZeros": false,
+              "mode": "single",
+              "sort": "none"
+            }
+          },
+          "pluginVersion": "12.4.2",
+          "targets": [
+            {
+              "editorMode": "code",
+              "expr": "sum(rate(loki_ingester_wal_logged_bytes_total[$__rate_interval]))",
+              "legendFormat": "rx",
+              "range": true,
+              "refId": "A"
+            }
+          ],
+          "title": "WAL bytes",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "thresholds"
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": 0
+                  }
+                ]
+              },
+              "unit": "logs"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 6,
+            "x": 12,
+            "y": 300
+          },
+          "id": 25,
+          "options": {
+            "colorMode": "value",
+            "graphMode": "area",
+            "justifyMode": "auto",
+            "orientation": "auto",
+            "percentChangeColorMode": "standard",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "showPercentChange": false,
+            "textMode": "auto",
+            "wideLayout": true
+          },
+          "pluginVersion": "12.4.2",
+          "targets": [
+            {
+              "editorMode": "code",
+              "expr": "sum(increase(loki_log_messages_total[$__range]))",
+              "legendFormat": "rx",
+              "range": true,
+              "refId": "A"
+            }
+          ],
+          "title": "Records total",
+          "type": "stat"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "thresholds"
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": 0
+                  }
+                ]
+              },
+              "unit": "bytes"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 6,
+            "x": 18,
+            "y": 300
+          },
+          "id": 26,
+          "options": {
+            "colorMode": "value",
+            "graphMode": "area",
+            "justifyMode": "auto",
+            "orientation": "auto",
+            "percentChangeColorMode": "standard",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "showPercentChange": false,
+            "textMode": "auto",
+            "wideLayout": true
+          },
+          "pluginVersion": "12.4.2",
+          "targets": [
+            {
+              "editorMode": "code",
+              "expr": "sum(increase(loki_distributor_bytes_received_total[$__range]))",
+              "legendFormat": "rx",
+              "range": true,
+              "refId": "A"
+            }
+          ],
+          "title": "Bytes total",
+          "type": "stat"
+        }
+      ],
       "title": "Loki",
       "type": "row"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "barWidthFactor": 0.6,
-            "drawStyle": "line",
-            "fillOpacity": 0,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "auto",
-            "showValues": false,
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": 0
-              },
-              {
-                "color": "red",
-                "value": 80
-              }
-            ]
-          },
-          "unit": "bytes"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 0,
-        "y": 69
-      },
-      "id": 22,
-      "options": {
-        "legend": {
-          "calcs": [],
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "hideZeros": false,
-          "mode": "single",
-          "sort": "none"
-        }
-      },
-      "pluginVersion": "12.4.2",
-      "targets": [
-        {
-          "editorMode": "code",
-          "expr": "sum(rate(loki_distributor_bytes_received_total[$__rate_interval]))",
-          "legendFormat": "rx",
-          "range": true,
-          "refId": "A"
-        }
-      ],
-      "title": "Bytes in",
-      "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "barWidthFactor": 0.6,
-            "drawStyle": "line",
-            "fillOpacity": 0,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "auto",
-            "showValues": false,
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": 0
-              },
-              {
-                "color": "red",
-                "value": 80
-              }
-            ]
-          },
-          "unit": "reqps"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 12,
-        "y": 69
-      },
-      "id": 24,
-      "options": {
-        "legend": {
-          "calcs": [],
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "hideZeros": false,
-          "mode": "single",
-          "sort": "none"
-        }
-      },
-      "pluginVersion": "12.4.2",
-      "targets": [
-        {
-          "editorMode": "code",
-          "expr": "sum(rate(loki_ingester_wal_records_logged_total[$__rate_interval]))",
-          "legendFormat": "rx",
-          "range": true,
-          "refId": "A"
-        }
-      ],
-      "title": "Records in",
-      "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "barWidthFactor": 0.6,
-            "drawStyle": "line",
-            "fillOpacity": 0,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "auto",
-            "showValues": false,
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": 0
-              },
-              {
-                "color": "red",
-                "value": 80
-              }
-            ]
-          },
-          "unit": "bytes"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 0,
-        "y": 77
-      },
-      "id": 23,
-      "options": {
-        "legend": {
-          "calcs": [],
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "hideZeros": false,
-          "mode": "single",
-          "sort": "none"
-        }
-      },
-      "pluginVersion": "12.4.2",
-      "targets": [
-        {
-          "editorMode": "code",
-          "expr": "sum(rate(loki_ingester_wal_logged_bytes_total[$__rate_interval]))",
-          "legendFormat": "rx",
-          "range": true,
-          "refId": "A"
-        }
-      ],
-      "title": "WAL bytes",
-      "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": 0
-              }
-            ]
-          },
-          "unit": "logs"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 6,
-        "x": 12,
-        "y": 77
-      },
-      "id": 25,
-      "options": {
-        "colorMode": "value",
-        "graphMode": "area",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "percentChangeColorMode": "standard",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "showPercentChange": false,
-        "textMode": "auto",
-        "wideLayout": true
-      },
-      "pluginVersion": "12.4.2",
-      "targets": [
-        {
-          "editorMode": "code",
-          "expr": "sum(increase(loki_log_messages_total[$__range]))",
-          "legendFormat": "rx",
-          "range": true,
-          "refId": "A"
-        }
-      ],
-      "title": "Records total",
-      "type": "stat"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": 0
-              }
-            ]
-          },
-          "unit": "bytes"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 6,
-        "x": 18,
-        "y": 77
-      },
-      "id": 26,
-      "options": {
-        "colorMode": "value",
-        "graphMode": "area",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "percentChangeColorMode": "standard",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "showPercentChange": false,
-        "textMode": "auto",
-        "wideLayout": true
-      },
-      "pluginVersion": "12.4.2",
-      "targets": [
-        {
-          "editorMode": "code",
-          "expr": "sum(increase(loki_distributor_bytes_received_total[$__range]))",
-          "legendFormat": "rx",
-          "range": true,
-          "refId": "A"
-        }
-      ],
-      "title": "Bytes total",
-      "type": "stat"
     },
     {
       "collapsed": true,
@@ -3825,7 +4067,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 85
+        "y": 48
       },
       "id": 15,
       "panels": [
@@ -3895,7 +4137,7 @@
             "h": 9,
             "w": 8,
             "x": 0,
-            "y": 86
+            "y": 309
           },
           "id": 16,
           "options": {
@@ -3957,7 +4199,7 @@
             "h": 9,
             "w": 5,
             "x": 8,
-            "y": 86
+            "y": 309
           },
           "id": 17,
           "options": {
@@ -4056,7 +4298,7 @@
             "h": 9,
             "w": 6,
             "x": 13,
-            "y": 86
+            "y": 309
           },
           "id": 19,
           "options": {
@@ -4147,7 +4389,7 @@
             "h": 9,
             "w": 5,
             "x": 19,
-            "y": 86
+            "y": 309
           },
           "id": 18,
           "interval": "15s",
@@ -4187,7 +4429,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 86
+        "y": 49
       },
       "id": 41,
       "panels": [
@@ -4257,7 +4499,7 @@
             "h": 10,
             "w": 9,
             "x": 0,
-            "y": 87
+            "y": 310
           },
           "id": 45,
           "options": {
@@ -4378,7 +4620,7 @@
             "h": 10,
             "w": 5,
             "x": 9,
-            "y": 87
+            "y": 310
           },
           "id": 42,
           "options": {
@@ -4475,7 +4717,7 @@
             "h": 10,
             "w": 5,
             "x": 14,
-            "y": 87
+            "y": 310
           },
           "id": 43,
           "options": {
@@ -4595,7 +4837,7 @@
             "h": 10,
             "w": 5,
             "x": 19,
-            "y": 87
+            "y": 310
           },
           "id": 44,
           "options": {
@@ -4658,7 +4900,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 87
+        "y": 50
       },
       "id": 11,
       "panels": [
@@ -4728,7 +4970,7 @@
             "h": 8,
             "w": 6,
             "x": 0,
-            "y": 88
+            "y": 311
           },
           "id": 10,
           "options": {
@@ -4824,7 +5066,7 @@
             "h": 8,
             "w": 6,
             "x": 6,
-            "y": 88
+            "y": 311
           },
           "id": 12,
           "options": {
@@ -4950,7 +5192,7 @@
             "h": 8,
             "w": 5,
             "x": 12,
-            "y": 88
+            "y": 311
           },
           "id": 13,
           "options": {
@@ -5028,7 +5270,7 @@
             "h": 8,
             "w": 7,
             "x": 17,
-            "y": 88
+            "y": 311
           },
           "id": 14,
           "options": {
@@ -5076,7 +5318,7 @@
     "list": []
   },
   "time": {
-    "from": "now-3h",
+    "from": "now-6h",
     "to": "now"
   },
   "timepicker": {},

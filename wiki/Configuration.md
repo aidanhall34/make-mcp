@@ -33,6 +33,11 @@ timeouts:
   low: 10m
   medium: 10m
   high: 10m
+
+# Destination for JSON logs.
+# One of: stderr, or a file path.
+# Default: "stderr"
+log_path: "stderr"
 ```
 
 OpenTelemetry exporter behavior is configured with the standard environment
@@ -50,6 +55,7 @@ Both `cmd/validate` and `cmd/mcp-server` accept these flags:
 | `--delimiter <str>` | `delimiter` | Annotation delimiter string. |
 | `--makefile <path>` | `makefiles` | Makefile to parse; repeatable for multiple files. |
 | `--strict` | `strict` | Require every supported recipe annotation, including optional MCP tool hints. |
+| `--log-path <path>` | `log_path` | Destination for JSON logs (e.g. `stderr`, or a file path). |
 
 `cmd/mcp-server` additionally accepts:
 
