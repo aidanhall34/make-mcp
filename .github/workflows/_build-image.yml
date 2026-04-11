@@ -42,6 +42,14 @@ jobs:
             IMAGE_TAG="${{ inputs.image-tag }}" \
             OTEL_TEST_ENDPOINT="${OTEL_EXPORTER_OTLP_ENDPOINT}"
 
+      - name: Run Trivy vulnerability scanner on container tar
+        uses: aquasecurity/trivy-action@master
+        with:
+          input: dist/make-mcp_${{ inputs.image-tag }}_linux_${{ inputs.arch }}.tar
+          format: 'table'
+          exit-code: '1'
+          severity: 'HIGH,CRITICAL'
+
       - name: Upload container tar artifact
         uses: actions/upload-artifact@v4
         with:
@@ -51,7 +59,7 @@ jobs:
           retention-days: 7
 
       - name: Notify Discord
-        if: always()
+        if: failure()
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
           GH_TOKEN: ${{ github.token }}

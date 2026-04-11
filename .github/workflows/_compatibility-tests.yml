@@ -38,7 +38,7 @@ jobs:
           IMAGE_TAG="${{ inputs.image-tag }}" K6_SCRIPT="/scripts/tools-call-hello-world.js" make integration-binary ARCH=${{ inputs.arch }}
 
       - name: Notify Discord
-        if: always()
+        if: failure()
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
           GH_TOKEN: ${{ github.token }}
@@ -76,7 +76,7 @@ jobs:
           IMAGE_TAG="${{ inputs.image-tag }}" K6_SCRIPT="/scripts/tools-call-hello-world.js" make integration-prebuilt
 
       - name: Notify Discord
-        if: always()
+        if: failure()
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
           GH_TOKEN: ${{ github.token }}

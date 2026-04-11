@@ -37,7 +37,7 @@ jobs:
           make test-binary ARCH=${{ inputs.arch }}
 
       - name: Notify Discord
-        if: always()
+        if: failure()
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
           GH_TOKEN: ${{ github.token }}
@@ -73,7 +73,7 @@ jobs:
         run: make smoke-test-container ARCH=${{ inputs.arch }} IMAGE_TAG="${{ inputs.image-tag }}"
 
       - name: Notify Discord
-        if: always()
+        if: failure()
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
           GH_TOKEN: ${{ github.token }}

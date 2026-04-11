@@ -29,7 +29,7 @@ jobs:
           extra_args: --debug --only-verified
 
       - name: Notify Discord
-        if: always()
+        if: failure()
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
           GH_TOKEN: ${{ github.token }}
@@ -59,7 +59,7 @@ jobs:
           severity: 'HIGH,CRITICAL'
 
       - name: Notify Discord
-        if: always()
+        if: failure()
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
           GH_TOKEN: ${{ github.token }}

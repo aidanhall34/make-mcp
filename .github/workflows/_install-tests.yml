@@ -29,11 +29,11 @@ jobs:
 
       - name: Verify installation
         run: |
-          $(go env GOPATH)/bin/make-mcp --help
-          $(go env GOPATH)/bin/make-mcp-validate --config make-mcp.yml
+          $(go env GOPATH)/bin/mcp-server --help
+          $(go env GOPATH)/bin/validate --config make-mcp.yml
 
       - name: Notify Discord
-        if: always()
+        if: failure()
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
           GH_TOKEN: ${{ github.token }}

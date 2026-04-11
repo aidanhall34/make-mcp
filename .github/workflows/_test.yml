@@ -30,7 +30,7 @@ jobs:
           make unit-tests 2>&1 | tee dev/logs/unit-tests.log
 
       - name: Notify Discord
-        if: always()
+        if: failure()
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
           GH_TOKEN: ${{ github.token }}
