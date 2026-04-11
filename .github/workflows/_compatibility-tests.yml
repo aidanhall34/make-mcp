@@ -37,8 +37,7 @@ jobs:
       - name: Run binary compatibility tests
         run: |
           chmod +x dist/make-mcp_linux_${{ inputs.arch }} dist/make-mcp-validate_linux_${{ inputs.arch }}
-          IMAGE_TAG="${{ inputs.image-tag }}" K6_SCRIPT="/scripts/tools-list.js" make integration-binary ARCH=${{ inputs.arch }}
-          IMAGE_TAG="${{ inputs.image-tag }}" K6_SCRIPT="/scripts/tools-call-hello-world.js" make integration-binary ARCH=${{ inputs.arch }}
+          IMAGE_TAG="${{ inputs.image-tag }}" make integration-binary ARCH=${{ inputs.arch }}
 
       - name: Notify Discord
         if: failure()
@@ -78,8 +77,7 @@ jobs:
 
       - name: Run container compatibility tests
         run: |
-          IMAGE_TAG="${{ inputs.image-tag }}" K6_SCRIPT="/scripts/tools-list.js" make integration-prebuilt
-          IMAGE_TAG="${{ inputs.image-tag }}" K6_SCRIPT="/scripts/tools-call-hello-world.js" make integration-prebuilt
+          IMAGE_TAG="${{ inputs.image-tag }}" make integration-prebuilt
 
       - name: Notify Discord
         if: failure()

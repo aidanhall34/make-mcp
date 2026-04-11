@@ -186,7 +186,7 @@ dev/
       integration.js               Runs the full local integration suite
       tools-list.js                Focused tools/list integration case
       tools-call-hello-world.js    Focused tools/call integration case
-  tmp/                             Runtime artefacts (created + deleted per run)
+  tmp/                             Runtime artifacts (created + deleted per run)
     summary.json                   k6 JSON summary output
 testdata/
   Makefile                         Annotated Makefile served by the integration server
