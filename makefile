@@ -4,6 +4,7 @@ DEV_DIR=./dev
 _LOG_DIR := $(DEV_DIR)/logs
 TRUFFLEHOG_VERSION=3.94.3
 TRIVY_VERSION=0.69.3
+HADOLINT_VERSION=2.12.0
 GITHUB_OWNER=aidanhall34
 IMAGE_NAME=ghcr.io/$(GITHUB_OWNER)/make-mcp
 TEST_IMAGE_NAME=$(IMAGE_NAME)-test
@@ -193,6 +194,28 @@ lint-go:
 	} $(call _tee-log,lint-go) ; \
 	wait
 
+# @ name: Lint Dockerfile
+# @ description: Lints all Dockerfiles in the repository with hadolint running in a Docker container. Fails if any exceptions are found.
+# @ risk: low
+# @ read-only: true
+# @ destructive: false
+# @ idempotent: true
+# @ open-world: true
+# @ param: none
+# @ output: hadolint lint results
+# @ output-type: text/plain
+lint-dockerfile:
+	@mkdir -p "$(_LOG_DIR)"
+	@{ \
+		dockerfiles="$$(find . -name "Dockerfile*" -not -path "./node_modules/*" | sort | tr '\n' ' ')" ; \
+		docker run --rm \
+			-v "$(CURDIR):/workspace" \
+			-w "/workspace" \
+			hadolint/hadolint:v$(HADOLINT_VERSION) \
+			hadolint $$dockerfiles ; \
+	} $(call _tee-log,lint-dockerfile) ; \
+	wait
+
 # @ name: Scan Secrets
 # @ description: Scans the repository for secrets using TruffleHog in a Docker container.
 # @ risk: low
@@ -267,7 +290,7 @@ scan-test-container:
 # @ param: none
 # @ output: Lint and validation results
 # @ output-type: text/plain
-lint: lint-go lint-markdown lint-tidy validate
+lint: lint-dockerfile lint-go lint-markdown lint-tidy validate
 
 # @ name: Build
 # @ description: Compiles all binaries and builds all containers

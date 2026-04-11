@@ -60,12 +60,14 @@ build-container-tar:
 # @ idempotent: true
 # @ open-world: false
 # @ param: IMAGE_TAG string | Container image tag to apply (default: latest)
+# @ param: ARCH string | Target architecture: amd64 or arm64 (default: amd64)
 # @ output: Docker build output
 # @ output-type: application/octet-stream
 build-test-image:
 	@mkdir -p "$(_LOG_DIR)"
 	@{ \
 		docker build --progress=rawjson \
+			--platform "linux/$(ARCH)" \
 			--build-arg "MAKE_MCP_IMAGE=$(IMAGE_NAME):$(IMAGE_TAG)" \
 			-t "$(TEST_IMAGE_NAME):$(IMAGE_TAG)" \
 			-f "$(DEV_DIR)/integration/Dockerfile.test-server" \

@@ -11,10 +11,9 @@ always connected and all annotated targets are available as MCP tools.
 
 | Action | MCP tool to call |
 |---|---|
-| After any code change | `unit-tests` then `lint` |
-| After any makefile change | `validate` then `lint` |
-| After any markdown change | `lint-markdown` |
-| Full pre-merge check | `tests`, `lint`, `validate` |
+| After any change | `lint` |
+| After any code change | `tests` |
+| Full pre-merge check | `lint` `tests` |
 | Build binaries | `build-mcp-server`, `build-validator` |
 | Build container | `build-container` |
 | Start dev stack | `dev-up` |
@@ -100,5 +99,4 @@ always connected and all annotated targets are available as MCP tools.
 
 # Docker conventions
 
-- All image tags should be set with environment variables.
-- Validate dockerfile changes with the `Build Container` make-mcp server tool
+- All image tags must be set with environment variables.

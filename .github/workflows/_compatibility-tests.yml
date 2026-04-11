@@ -74,7 +74,7 @@ jobs:
         run: docker load -i dist/make-mcp_${{ inputs.image-tag }}_linux_${{ inputs.arch }}.tar
 
       - name: Build test image
-        run: make build-test-image IMAGE_TAG="${{ inputs.image-tag }}"
+        run: make build-test-image IMAGE_TAG="${{ inputs.image-tag }}" ARCH=${{ inputs.arch }}
 
       - name: Run container compatibility tests
         run: |
