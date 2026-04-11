@@ -9,6 +9,19 @@ import (
 	"go.opentelemetry.io/otel"
 )
 
+func TestResolveHint_Defaults(t *testing.T) {
+	if got := resolveHint(nil, true); got != true {
+		t.Errorf("resolveHint(nil, true) = %v, want true", got)
+	}
+	if got := resolveHint(nil, false); got != false {
+		t.Errorf("resolveHint(nil, false) = %v, want false", got)
+	}
+	tr := true
+	if got := resolveHint(&tr, false); got != true {
+		t.Errorf("resolveHint(&true, false) = %v, want true", got)
+	}
+}
+
 func TestPrometheusAddr_Defaults(t *testing.T) {
 	t.Setenv("OTEL_EXPORTER_PROMETHEUS_HOST", "")
 	t.Setenv("OTEL_EXPORTER_PROMETHEUS_PORT", "")
@@ -73,6 +86,9 @@ func TestMetrics(t *testing.T) {
 	}
 	if m.ToolInvocationBytesOut == nil {
 		t.Error("ToolInvocationBytesOut is nil")
+	}
+	if m.ToolsRegistered == nil {
+		t.Error("ToolsRegistered is nil")
 	}
 }
 

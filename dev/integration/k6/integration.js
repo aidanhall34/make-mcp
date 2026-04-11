@@ -32,10 +32,12 @@
 
 import { runHelloWorldCallSuite } from './tools-call-hello-world.js';
 import { options as toolsListOptions, runToolsListSuite } from './tools-list.js';
+import { runErrorComplianceSuite } from './tools-call-error.js';
 
 export const options = toolsListOptions;
 
 export default function () {
   runToolsListSuite();
   runHelloWorldCallSuite();
+  runErrorComplianceSuite();
 }

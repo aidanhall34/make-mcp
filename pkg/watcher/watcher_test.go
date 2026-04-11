@@ -358,7 +358,10 @@ func TestFlush_RescheduleWithTimer(t *testing.T) {
 		t.Errorf("unexpected event before path is ready: %+v", event)
 	default:
 	}
-	if _, still := w.pending[path]; !still {
+	w.mu.Lock()
+	_, still := w.pending[path]
+	w.mu.Unlock()
+	if !still {
 		t.Error("path should still be pending after reschedule")
 	}
 }
@@ -381,7 +384,10 @@ func TestFlush_Reschedule(t *testing.T) {
 		t.Errorf("unexpected event before path is ready: %+v", event)
 	default:
 	}
-	if _, still := w.pending[path]; !still {
+	w.mu.Lock()
+	_, still := w.pending[path]
+	w.mu.Unlock()
+	if !still {
 		t.Error("path should still be pending after reschedule")
 	}
 }

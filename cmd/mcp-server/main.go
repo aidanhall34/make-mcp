@@ -12,6 +12,7 @@ import (
 	"syscall"
 
 	"github.com/aidanhall34/make-mcp/pkg/config"
+	"github.com/aidanhall34/make-mcp/pkg/logging"
 	"github.com/aidanhall34/make-mcp/pkg/parser"
 	makecpserver "github.com/aidanhall34/make-mcp/pkg/server"
 	"github.com/aidanhall34/make-mcp/pkg/server/transport"
@@ -47,6 +48,7 @@ func run(args []string) error {
 		listen     string
 		logPath    string
 		strict     bool
+		debug      bool
 	)
 
 	fs.StringVar(&configPath, "config", "", "path to make-mcp.yml configuration file")
@@ -56,6 +58,7 @@ func run(args []string) error {
 	fs.StringVar(&listen, "listen", "", "HTTP listen address")
 	fs.StringVar(&logPath, "log-path", "", "destination for JSON logs (e.g. stderr, or a file path)")
 	fs.BoolVar(&strict, "strict", false, "require every supported recipe annotation, including optional MCP tool hints")
+	fs.BoolVar(&debug, "debug", false, "enable debug logging (includes tool args, stdout, and stderr)")
 
 	if err := fs.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
@@ -71,6 +74,7 @@ func run(args []string) error {
 		Listen:    listen,
 		LogPath:   logPath,
 		Strict:    strict,
+		Debug:     debug,
 	}
 	cfg, err := loadConfig(configPath, cliOverride)
 	if err != nil {
@@ -101,7 +105,11 @@ func run(args []string) error {
 		logWriter = f
 	}
 
-	logger := slog.New(slog.NewJSONHandler(logWriter, nil))
+	logLevel := slog.LevelInfo
+	if cfg.Debug {
+		logLevel = slog.LevelDebug
+	}
+	logger := slog.New(logging.NewTraceHandler(slog.NewJSONHandler(logWriter, &slog.HandlerOptions{Level: logLevel})))
 	slog.SetDefault(logger)
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)

@@ -36,6 +36,7 @@ makefiles:
 transport: http
 listen: 127.0.0.1:9999
 strict: true
+debug: true
 timeouts:
   low: 1m
   medium: 2m
@@ -71,6 +72,9 @@ timeouts:
 	}
 	if !cfg.Strict {
 		t.Error("strict: got false, want true")
+	}
+	if !cfg.Debug {
+		t.Error("debug: got false, want true")
 	}
 	if cfg.Timeouts.Low != time.Minute || cfg.Timeouts.Medium != 2*time.Minute || cfg.Timeouts.High != 3*time.Minute {
 		t.Errorf("timeouts: got %+v", cfg.Timeouts)
@@ -212,6 +216,15 @@ unknown_field: oops
 	_, err = config.LoadFile(f.Name())
 	if err == nil {
 		t.Error("expected error for unknown key, got nil")
+	}
+}
+
+func TestMerge_DebugEnabled(t *testing.T) {
+	base := config.Config{Debug: false}
+	override := config.Config{Debug: true}
+	result := config.Merge(base, override)
+	if !result.Debug {
+		t.Error("Merge: debug override did not take effect")
 	}
 }
 

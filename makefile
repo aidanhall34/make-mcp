@@ -380,6 +380,7 @@ gen-metrics-doc:
 # @ output-type: text/plain
 pre-commit: generate-wiki-sidebar gen-metrics-doc lint unit-tests scan-secrets scan-vulnerabilities
 
+.PHONY: build-validator
 # @ name: Build Validator
 # @ description: Compiles the makefile validator CLI binary to ./bin/make-mcp-validate.
 # @ risk: low
@@ -396,8 +397,9 @@ build-validator:
 		$(call _tee-log,build-validator) ; \
 	wait
 
+.PHONY: build-mcp-server
 # @ name: Build MCP Server
-# @ description: Compiles the MCP server CLI binary to ./bin/make-mcp.
+# @ description: Compiles the MCP server CLI binary to ./bin/make-mcp. RUN AFTER CHANGING ./pkg or ./cmd
 # @ risk: low
 # @ read-only: false
 # @ destructive: false

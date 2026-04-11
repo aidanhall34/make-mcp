@@ -67,6 +67,7 @@ build-test-image:
 	@mkdir -p "$(_LOG_DIR)"
 	@{ \
 		docker build --progress=rawjson \
+			--pull=false \
 			--platform "linux/$(ARCH)" \
 			--build-arg "MAKE_MCP_IMAGE=$(IMAGE_NAME):$(IMAGE_TAG)" \
 			-t "$(TEST_IMAGE_NAME):$(IMAGE_TAG)" \

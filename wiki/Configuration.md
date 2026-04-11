@@ -38,6 +38,11 @@ timeouts:
 # One of: stderr, or a file path.
 # Default: "stderr"
 log_path: "stderr"
+
+# Enable debug-level logging.
+# When true, tool call arguments, stdout, and stderr are included in logs.
+# Default: false
+debug: false
 ```
 
 OpenTelemetry exporter behavior is configured with the standard environment
@@ -56,6 +61,7 @@ Both `cmd/validate` and `cmd/mcp-server` accept these flags:
 | `--makefile <path>` | `makefiles` | Makefile to parse; repeatable for multiple files. |
 | `--strict` | `strict` | Require every supported recipe annotation, including optional MCP tool hints. |
 | `--log-path <path>` | `log_path` | Destination for JSON logs (e.g. `stderr`, or a file path). |
+| `--debug` | `debug` | Enable debug logging (includes tool args, stdout, and stderr). |
 
 `cmd/mcp-server` additionally accepts:
 

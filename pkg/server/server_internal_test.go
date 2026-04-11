@@ -10,7 +10,6 @@ import (
 	"github.com/aidanhall34/make-mcp/internal/testtel"
 	"github.com/aidanhall34/make-mcp/pkg/config"
 	"github.com/aidanhall34/make-mcp/pkg/parser"
-	"github.com/aidanhall34/make-mcp/pkg/runner"
 	"github.com/mark3labs/mcp-go/mcp"
 )
 
@@ -68,27 +67,15 @@ func TestTimeoutFor(t *testing.T) {
 
 // ---- handler helpers ----
 
-func TestRunnerErrorToJSONRPC_WithExitCode(t *testing.T) {
-	code := 2
-	err := runnerErrorToJSONRPC(&runner.Error{
-		Code:     runner.ErrorCodeExitNonZero,
-		Message:  "make target failed with exit code 2",
-		ExitCode: &code,
-		Stdout:   "partial out",
-		Stderr:   "partial err",
-	})
+func TestJsonRPCError_RunnerErrors(t *testing.T) {
+	// jsonRPCError is still used for protocol-level errors (e.g. tool not found).
+	// Verify it produces a non-nil error with a code we control.
+	err := jsonRPCError(-32601, "tool not found", nil)
 	if err == nil {
 		t.Fatal("expected non-nil error")
 	}
-}
-
-func TestRunnerErrorToJSONRPC_Timeout(t *testing.T) {
-	err := runnerErrorToJSONRPC(&runner.Error{
-		Code:     runner.ErrorCodeTimeout,
-		Message:  "timed out after 10m",
-		TimedOut: true,
-	})
-	if err == nil {
+	err2 := jsonRPCError(-32000, "server error", map[string]any{"detail": "boom"})
+	if err2 == nil {
 		t.Fatal("expected non-nil error")
 	}
 }
@@ -295,12 +282,196 @@ func TestHandleToolCall_RunnerError(t *testing.T) {
 
 	var req mcp.CallToolRequest
 	req.Params.Name = "fail"
-	result, err := s.handleToolCall(ctx, req)
-	if result != nil {
-		t.Error("expected nil result on runner error")
+	result, callErr := s.handleToolCall(ctx, req)
+	if callErr != nil {
+		t.Errorf("expected nil error for runner failure (returned as isError result), got %v", callErr)
 	}
-	if err == nil {
-		t.Error("expected error from runner, got nil")
+	if result == nil {
+		t.Fatal("expected non-nil result for runner error")
+	}
+	if !result.IsError {
+		t.Error("expected IsError true for runner error")
+	}
+}
+
+// ---- resolveHint ----
+
+func TestResolveHint_NilUsesDefault(t *testing.T) {
+	if got := resolveHint(nil, true); got != true {
+		t.Errorf("resolveHint(nil, true) = %v, want true", got)
+	}
+	if got := resolveHint(nil, false); got != false {
+		t.Errorf("resolveHint(nil, false) = %v, want false", got)
+	}
+}
+
+func TestResolveHint_ExplicitOverridesDefault(t *testing.T) {
+	tr := true
+	fa := false
+	if got := resolveHint(&tr, false); got != true {
+		t.Errorf("resolveHint(&true, false) = %v, want true", got)
+	}
+	if got := resolveHint(&fa, true); got != false {
+		t.Errorf("resolveHint(&false, true) = %v, want false", got)
+	}
+}
+
+// ---- error span events ----
+
+// TestHandleToolCall_DebugMode_Success exercises the debug logging paths on a
+// successful tool call (cfg.Debug = true).
+func TestHandleToolCall_DebugMode_Success(t *testing.T) {
+	ctx := testtel.Start(t)
+	dir := t.TempDir()
+	mfPath := filepath.Join(dir, "Makefile")
+	if err := os.WriteFile(mfPath, []byte("greet:\n\t@printf 'hi\\n'\n"), 0644); err != nil {
+		t.Fatalf("write makefile: %v", err)
+	}
+
+	cfg := config.Default()
+	cfg.Debug = true
+	s, err := New(cfg, []parser.Recipe{
+		{
+			ID:          "greet",
+			Name:        "Greet",
+			Description: "Greets.",
+			Risk:        parser.RiskLow,
+			SourceFile:  mfPath,
+			Params:      []parser.Param{{Name: "name", Type: parser.ParamTypeString, Description: "name"}},
+			Output:      "greeting",
+			OutputType:  "text/plain",
+		},
+	})
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+
+	var req mcp.CallToolRequest
+	req.Params.Name = "greet"
+	req.Params.Arguments = map[string]any{"name": "World"}
+	result, callErr := s.handleToolCall(ctx, req)
+	if callErr != nil {
+		t.Fatalf("handleToolCall() error = %v", callErr)
+	}
+	if result == nil {
+		t.Fatal("expected non-nil result")
+	}
+}
+
+// TestHandleToolCall_DebugMode_Failure exercises the debug logging paths on a
+// failing tool call (cfg.Debug = true).
+func TestHandleToolCall_DebugMode_Failure(t *testing.T) {
+	ctx := testtel.Start(t)
+	dir := t.TempDir()
+	mfPath := filepath.Join(dir, "Makefile")
+	if err := os.WriteFile(mfPath, []byte("fail:\n\t@exit 2\n"), 0644); err != nil {
+		t.Fatalf("write makefile: %v", err)
+	}
+
+	cfg := config.Default()
+	cfg.Debug = true
+	s, err := New(cfg, []parser.Recipe{
+		{
+			ID:          "fail",
+			Name:        "Fail",
+			Description: "Always fails.",
+			Risk:        parser.RiskLow,
+			SourceFile:  mfPath,
+			Params:      []parser.Param{},
+			Output:      "nothing",
+			OutputType:  "text/plain",
+		},
+	})
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+
+	var req mcp.CallToolRequest
+	req.Params.Name = "fail"
+	result, callErr := s.handleToolCall(ctx, req)
+	if callErr != nil {
+		t.Errorf("expected nil error for runner failure (returned as isError result), got %v", callErr)
+	}
+	if result == nil {
+		t.Fatal("expected non-nil result for runner error")
+	}
+	if !result.IsError {
+		t.Error("expected IsError true for runner error")
+	}
+}
+
+// TestHandleToolCall_RunnerErrorSetsSpanError verifies that handleToolCall
+// does not panic and records span error state when the underlying make process fails.
+// The span error / event recording path is exercised here even though the
+// test tracer (noop when OTEL_EXPORTER_OTLP_ENDPOINT is unset) discards the
+// exported data.
+func TestHandleToolCall_RunnerErrorSetsSpanError(t *testing.T) {
+	ctx := testtel.Start(t)
+	dir := t.TempDir()
+	mfPath := filepath.Join(dir, "Makefile")
+	if err := os.WriteFile(mfPath, []byte("fail:\n\t@exit 2\n"), 0644); err != nil {
+		t.Fatalf("write makefile: %v", err)
+	}
+
+	s, err := New(config.Default(), []parser.Recipe{
+		{
+			ID:          "fail",
+			Name:        "Fail",
+			Description: "Always fails.",
+			Risk:        parser.RiskLow,
+			SourceFile:  mfPath,
+			Params:      []parser.Param{},
+			Output:      "nothing",
+			OutputType:  "text/plain",
+		},
+	})
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+
+	var req mcp.CallToolRequest
+	req.Params.Name = "fail"
+	result, callErr := s.handleToolCall(ctx, req)
+	if callErr != nil {
+		t.Errorf("expected nil error for runner failure (returned as isError result), got %v", callErr)
+	}
+	if result == nil {
+		t.Fatal("expected non-nil result for runner error")
+	}
+	if !result.IsError {
+		t.Error("expected IsError true for runner error")
+	}
+}
+
+// ---- getRecipesByNames ----
+
+func TestGetRecipesByNames(t *testing.T) {
+	r := &Registry{
+		recipes: map[string]parser.Recipe{
+			"build": {ID: "build", Name: "Build", Risk: parser.RiskLow},
+			"test":  {ID: "test", Name: "Test", Risk: parser.RiskMedium},
+			"nuke":  {ID: "nuke", Name: "Nuke", Risk: parser.RiskHigh},
+		},
+	}
+
+	got := r.getRecipesByNames([]string{"build", "nuke", "missing"})
+	if len(got) != 2 {
+		t.Fatalf("getRecipesByNames returned %d recipes, want 2", len(got))
+	}
+	ids := map[string]bool{}
+	for _, rec := range got {
+		ids[rec.ID] = true
+	}
+	if !ids["build"] || !ids["nuke"] {
+		t.Errorf("got ids %v, want build and nuke", ids)
+	}
+}
+
+func TestGetRecipesByNames_Empty(t *testing.T) {
+	r := &Registry{recipes: map[string]parser.Recipe{}}
+	got := r.getRecipesByNames([]string{"missing"})
+	if len(got) != 0 {
+		t.Fatalf("expected empty slice, got %v", got)
 	}
 }
 

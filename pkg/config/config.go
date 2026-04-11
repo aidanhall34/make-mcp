@@ -49,6 +49,10 @@ type Config struct {
 	// LogPath is the destination for JSON logs. Defaults to stderr.
 	LogPath string `yaml:"log_path"`
 
+	// Debug enables debug-level logging. When true, tool call arguments,
+	// stdout, and stderr are included in log output.
+	Debug bool `yaml:"debug"`
+
 	// Timeouts configures per-risk execution timeouts.
 	Timeouts Timeouts `yaml:"timeouts"`
 }
@@ -105,6 +109,9 @@ func Merge(base, override Config) Config {
 	}
 	if override.LogPath != "" {
 		out.LogPath = override.LogPath
+	}
+	if override.Debug {
+		out.Debug = true
 	}
 	if override.Timeouts.Low != 0 {
 		out.Timeouts.Low = override.Timeouts.Low

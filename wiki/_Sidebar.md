@@ -3,6 +3,6 @@
 - [[Configuration]]
 - [[GitHub CI]]
 - [[Installation]]
-- [[Metrics]]
 - [[Schema]]
+- [[Telemetry]]
 - [[Testing]]

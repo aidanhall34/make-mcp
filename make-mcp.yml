@@ -32,6 +32,11 @@ listen: "127.0.0.1:9378"
 # Default: "stderr"
 log_path: "dev/logs/make-mcp-server.log"
 
+# debug: enable debug-level logging.
+# When true, tool call arguments, stdout, and stderr are included in logs.
+# Default: false
+debug: false
+
 # timeouts: per-risk execution timeouts for tool invocations.
 # Default: 10m for all risk levels.
 timeouts:

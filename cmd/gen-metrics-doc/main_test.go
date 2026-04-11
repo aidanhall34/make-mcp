@@ -19,6 +19,8 @@ func TestMethodToType(t *testing.T) {
 		{"Float64Counter", TypeCounter},
 		{"Int64UpDownCounter", TypeGauge},
 		{"Float64UpDownCounter", TypeGauge},
+		{"Int64Gauge", TypeGauge},
+		{"Float64Gauge", TypeGauge},
 		{"Int64Histogram", TypeHistogram},
 		{"Float64Histogram", TypeHistogram},
 		{"unknown", TypeHistogram},
@@ -287,7 +289,7 @@ func f(m struct{ Calls metric.Int64Counter }) {
 			break
 		}
 	}
-	result := extractLabelsFromFunc(fn)
+	result := extractLabelsFromFunc(fn, nil)
 	keys, ok := result["Calls"]
 	if !ok {
 		t.Fatal("expected label keys for Calls, got none")
@@ -360,8 +362,8 @@ func TestBuildTemplateData_RealMetrics(t *testing.T) {
 	}
 
 	total := len(data.Counters) + len(data.Histograms) + len(data.Gauges)
-	if total != 11 {
-		t.Errorf("total metrics = %d, want 11 (counters=%d histograms=%d gauges=%d)",
+	if total != 12 {
+		t.Errorf("total metrics = %d, want 12 (counters=%d histograms=%d gauges=%d)",
 			total, len(data.Counters), len(data.Histograms), len(data.Gauges))
 	}
 
@@ -407,5 +409,61 @@ func TestBuildTemplateData_RealMetrics(t *testing.T) {
 				t.Errorf("latency histogram unit = %q, want %q", m.Unit, "s")
 			}
 		}
+	}
+
+	// tools_listed_total must carry risk and MCP tool-hint labels.
+	wantListedLabels := map[string]bool{
+		"risk":        true,
+		"read_only":   true,
+		"destructive": true,
+		"idempotent":  true,
+		"open_world":  true,
+	}
+	var foundListed bool
+	for _, m := range data.Counters {
+		if m.Name == "make_mcp_tools_listed_total" {
+			foundListed = true
+			remaining := make(map[string]bool)
+			for k, v := range wantListedLabels {
+				remaining[k] = v
+			}
+			for _, l := range m.Labels {
+				delete(remaining, l)
+			}
+			if len(remaining) > 0 {
+				t.Errorf("tools_listed_total missing labels: %v (got %v)", remaining, m.Labels)
+			}
+		}
+	}
+	if !foundListed {
+		t.Error("make_mcp_tools_listed_total not found in Counters")
+	}
+
+	// tools_registered must carry risk and MCP tool-hint labels.
+	wantRegisteredLabels := map[string]bool{
+		"risk":        true,
+		"read_only":   true,
+		"destructive": true,
+		"idempotent":  true,
+		"open_world":  true,
+	}
+	var foundRegistered bool
+	for _, m := range data.Gauges {
+		if m.Name == "make_mcp_tools_registered" {
+			foundRegistered = true
+			remaining := make(map[string]bool)
+			for k, v := range wantRegisteredLabels {
+				remaining[k] = v
+			}
+			for _, l := range m.Labels {
+				delete(remaining, l)
+			}
+			if len(remaining) > 0 {
+				t.Errorf("tools_registered missing labels: %v (got %v)", remaining, m.Labels)
+			}
+		}
+	}
+	if !foundRegistered {
+		t.Error("make_mcp_tools_registered not found in Gauges")
 	}
 }

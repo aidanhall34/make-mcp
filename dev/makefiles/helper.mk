@@ -180,7 +180,7 @@ endef
 
 # Runs a local instance of the mcp inspector for debugging.
 .PHONY: dev-mcp-inspector
-dev-mcp-inspector: build
+dev-mcp-inspector: build-mcp-server
 	npx @modelcontextprotocol/inspector \
 		-e "OTEL_TRACES_EXPORTER=otlp" \
 		-e "OTEL_METRICS_EXPORTER=otlp" \

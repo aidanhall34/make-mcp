@@ -1,5 +1,5 @@
 // Command gen-metrics-doc parses pkg/telemetry/metrics.go using the Go AST and
-// generates docs/metrics.md from docs/metrics.md.tmpl.
+// generates wiki/Telemetry.md from docs/telemetry.md.tmpl.
 //
 // Run from the repository root:
 //
@@ -85,12 +85,12 @@ func main() {
 	err := run(
 		"pkg/telemetry/metrics.go",
 		"cmd/mcp-server/main.go",
-		"docs/metrics.md.tmpl",
-		"wiki/Metrics.md",
+		"docs/telemetry.md.tmpl",
+		"wiki/Telemetry.md",
 	)
 	switch {
 	case errors.Is(err, errOutdated):
-		fmt.Fprintln(os.Stderr, "wiki/Metrics.md was outdated and has been regenerated.")
+		fmt.Fprintln(os.Stderr, "wiki/Telemetry.md was outdated and has been regenerated.")
 		fmt.Fprintln(os.Stderr, "Please stage the changes and commit again.")
 		os.Exit(1)
 	case err != nil:
@@ -144,6 +144,11 @@ func buildTemplateData(metricsFile, extraFile string) (templateData, error) {
 		return templateData{}, fmt.Errorf("parse %s: %w", metricsFile, err)
 	}
 
+	// Build a map of helper function name → attribute keys they directly use.
+	// This lets extractLabelsFromFunc follow calls like recipeAttrs(...) and
+	// expand their keys into the calling function's attribute set.
+	helperAttrKeys := buildHelperAttrKeys(f)
+
 	var orderedFields []string
 	fieldToMetric := map[string]MetricDef{}
 	fieldToLabels := map[string][]string{}
@@ -157,7 +162,7 @@ func buildTemplateData(metricsFile, extraFile string) (templateData, error) {
 			orderedFields, fieldToMetric = extractMetricDefs(fn)
 			continue
 		}
-		for field, keys := range extractLabelsFromFunc(fn) {
+		for field, keys := range extractLabelsFromFunc(fn, helperAttrKeys) {
 			fieldToLabels[field] = mergeKeys(fieldToLabels[field], keys)
 		}
 	}
@@ -169,7 +174,7 @@ func buildTemplateData(metricsFile, extraFile string) (templateData, error) {
 				if !ok || fn.Body == nil {
 					continue
 				}
-				for field, keys := range extractLabelsFromFunc(fn) {
+				for field, keys := range extractLabelsFromFunc(fn, helperAttrKeys) {
 					fieldToLabels[field] = mergeKeys(fieldToLabels[field], keys)
 				}
 			}
@@ -278,14 +283,57 @@ func extractMetricDefs(fn *ast.FuncDecl) ([]string, map[string]MetricDef) {
 	return orderedFields, result
 }
 
+// buildHelperAttrKeys scans all non-initMetrics functions in the file and
+// returns a map of function name → attribute keys that appear directly in
+// that function's body. This allows extractLabelsFromFunc to expand calls to
+// helpers like recipeAttrs(...) into their constituent attribute keys.
+func buildHelperAttrKeys(f *ast.File) map[string][]string {
+	result := map[string][]string{}
+	for _, decl := range f.Decls {
+		fn, ok := decl.(*ast.FuncDecl)
+		if !ok || fn.Body == nil || fn.Name.Name == "initMetrics" {
+			continue
+		}
+		var keys []string
+		ast.Inspect(fn.Body, func(n ast.Node) bool {
+			call, ok := n.(*ast.CallExpr)
+			if !ok {
+				return true
+			}
+			sel, ok := call.Fun.(*ast.SelectorExpr)
+			if !ok {
+				return true
+			}
+			pkg, ok := sel.X.(*ast.Ident)
+			if !ok || pkg.Name != "attribute" {
+				return true
+			}
+			if len(call.Args) == 0 {
+				return true
+			}
+			lit, ok := call.Args[0].(*ast.BasicLit)
+			if !ok || lit.Kind != token.STRING {
+				return true
+			}
+			keys = append(keys, strings.Trim(lit.Value, `"`))
+			return true
+		})
+		if len(keys) > 0 {
+			result[fn.Name.Name] = keys
+		}
+	}
+	return result
+}
+
 // extractLabelsFromFunc returns a map of Instruments field name -> label keys
 // for all metric Add/Record calls found in fn.
 //
-// It handles both inline attribute.String calls and the common pattern of
-// assigning metric.WithAttributes(...) to a local variable first.
-func extractLabelsFromFunc(fn *ast.FuncDecl) map[string][]string {
+// It handles both inline attribute.String/Bool/... calls and the common pattern
+// of assigning metric.WithAttributes(...) to a local variable first, including
+// indirect calls to helper functions listed in helperAttrKeys.
+func extractLabelsFromFunc(fn *ast.FuncDecl, helperAttrKeys map[string][]string) map[string][]string {
 	// First pass: collect local variable assignments whose RHS contains
-	// attribute keys (e.g. attrs := metric.WithAttributes(attribute.String(...))).
+	// attribute keys, either inline or via a known helper function call.
 	varAttrs := map[string][]string{}
 	ast.Inspect(fn.Body, func(n ast.Node) bool {
 		assign, ok := n.(*ast.AssignStmt)
@@ -299,7 +347,10 @@ func extractLabelsFromFunc(fn *ast.FuncDecl) map[string][]string {
 		if !ok {
 			return true
 		}
-		if keys := collectAttrKeys(assign.Rhs[0]); len(keys) > 0 {
+		keys := collectAttrKeys(assign.Rhs[0])
+		// Also expand any function calls in the RHS to known helper functions.
+		keys = append(keys, collectHelperCallKeys(assign.Rhs[0], helperAttrKeys)...)
+		if len(keys) > 0 {
 			varAttrs[ident.Name] = keys
 		}
 		return true
@@ -333,6 +384,32 @@ func extractLabelsFromFunc(fn *ast.FuncDecl) map[string][]string {
 	})
 
 	return result
+}
+
+// collectHelperCallKeys walks expr looking for calls to functions whose
+// attribute keys are known (listed in helperAttrKeys) and returns those keys.
+// This enables label extraction when metric.WithAttributes is passed a spread
+// call like recipeAttrs(...) instead of inline attribute.X("key", ...) calls.
+func collectHelperCallKeys(expr ast.Expr, helperAttrKeys map[string][]string) []string {
+	var keys []string
+	ast.Inspect(expr, func(n ast.Node) bool {
+		call, ok := n.(*ast.CallExpr)
+		if !ok {
+			return true
+		}
+		var funcName string
+		switch f := call.Fun.(type) {
+		case *ast.Ident:
+			funcName = f.Name
+		case *ast.SelectorExpr:
+			funcName = f.Sel.Name
+		}
+		if funcName != "" {
+			keys = append(keys, helperAttrKeys[funcName]...)
+		}
+		return true
+	})
+	return keys
 }
 
 // collectAttrKeys recursively finds all attribute package call keys in expr.
@@ -399,7 +476,7 @@ func methodToType(method string) MetricType {
 	switch method {
 	case "Int64Counter", "Float64Counter":
 		return TypeCounter
-	case "Int64UpDownCounter", "Float64UpDownCounter":
+	case "Int64UpDownCounter", "Float64UpDownCounter", "Int64Gauge", "Float64Gauge":
 		return TypeGauge
 	default:
 		return TypeHistogram

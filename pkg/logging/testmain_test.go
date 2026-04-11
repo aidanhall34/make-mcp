@@ -1,4 +1,4 @@
-package server_test
+package logging_test
 
 import (
 	"os"
@@ -8,5 +8,5 @@ import (
 )
 
 func TestMain(m *testing.M) {
-	os.Exit(testtel.RunMain(m, 0.80))
+	os.Exit(testtel.RunMain(m, 0.95))
 }

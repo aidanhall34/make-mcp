@@ -35,3 +35,12 @@ clean:
 # @ output-type: text/plain
 greet:
 	@for i in $(shell seq 1 $(COUNT)); do echo "Hello, $(NAME)!"; done
+
+# @ name: Always Fail
+# @ description: Calls a command that does not exist, causing make to exit with a non-zero status. Used for error-handling compliance tests.
+# @ risk: low
+# @ param: none
+# @ output: Nothing — the recipe always fails before producing output
+# @ output-type: text/plain
+always-fail:
+	@make-mcp-no-such-command-xyz

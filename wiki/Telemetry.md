@@ -1,4 +1,4 @@
-# Metrics Reference
+# Telemetry Reference
 
 > This file is auto-generated. Run `make gen-metrics-doc` to regenerate.
 
@@ -16,7 +16,7 @@ override with `OTEL_EXPORTER_PROMETHEUS_HOST` and `OTEL_EXPORTER_PROMETHEUS_PORT
 |---|---|
 | Description | — |
 | Unit | — |
-| Labels | _(none)_ |
+| Labels | `destructive`, `idempotent`, `open_world`, `read_only`, `risk` |
 
 ### `make_mcp_tools_list_requests_total`
 
@@ -24,7 +24,7 @@ override with `OTEL_EXPORTER_PROMETHEUS_HOST` and `OTEL_EXPORTER_PROMETHEUS_PORT
 |---|---|
 | Description | — |
 | Unit | — |
-| Labels | _(none)_ |
+| Labels | `status` |
 
 ### `make_mcp_tool_reload_total`
 
@@ -40,7 +40,7 @@ override with `OTEL_EXPORTER_PROMETHEUS_HOST` and `OTEL_EXPORTER_PROMETHEUS_PORT
 |---|---|
 | Description | — |
 | Unit | — |
-| Labels | `risk`, `status`, `tool` |
+| Labels | `destructive`, `idempotent`, `open_world`, `read_only`, `risk`, `status`, `tool` |
 
 ## Histograms
 
@@ -74,7 +74,7 @@ override with `OTEL_EXPORTER_PROMETHEUS_HOST` and `OTEL_EXPORTER_PROMETHEUS_PORT
 |---|---|
 | Description | — |
 | Unit | — |
-| Labels | `risk`, `status`, `tool` |
+| Labels | `destructive`, `idempotent`, `open_world`, `read_only`, `risk`, `status`, `tool` |
 
 ### `make_mcp_tool_invocation_bytes_in`
 
@@ -82,7 +82,7 @@ override with `OTEL_EXPORTER_PROMETHEUS_HOST` and `OTEL_EXPORTER_PROMETHEUS_PORT
 |---|---|
 | Description | Bytes received in tool invocation requests (JSON-encoded arguments). |
 | Unit | By |
-| Labels | `status`, `tool` |
+| Labels | `destructive`, `idempotent`, `open_world`, `read_only`, `risk`, `status`, `tool` |
 
 ### `make_mcp_tool_invocation_bytes_out`
 
@@ -90,7 +90,7 @@ override with `OTEL_EXPORTER_PROMETHEUS_HOST` and `OTEL_EXPORTER_PROMETHEUS_PORT
 |---|---|
 | Description | Bytes sent in tool invocation responses (stdout + stderr). |
 | Unit | By |
-| Labels | `status`, `tool` |
+| Labels | `destructive`, `idempotent`, `open_world`, `read_only`, `risk`, `status`, `tool` |
 
 ## Gauges
 
@@ -101,6 +101,14 @@ override with `OTEL_EXPORTER_PROMETHEUS_HOST` and `OTEL_EXPORTER_PROMETHEUS_PORT
 | Description | — |
 | Unit | — |
 | Labels | `transport` |
+
+### `make_mcp_tools_registered`
+
+| Property | Value |
+|---|---|
+| Description | Current number of registered MCP tools. |
+| Unit | — |
+| Labels | `destructive`, `idempotent`, `open_world`, `read_only`, `risk` |
 
 A dashboard using the metrics can be found at `./dev/dashboards/`.\
 ![make-mcp key metrics dashboard panels](./images/make-mcp-development-panels.png)
