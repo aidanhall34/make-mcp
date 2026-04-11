@@ -2,7 +2,8 @@ SHELL=/usr/bin/env bash
 LGTM_VERSION:= 0.23.0
 DEV_DIR=./dev
 _LOG_DIR := $(DEV_DIR)/logs
-
+TRUFFLEHOG_VERSION=3.94.3
+TRIVY_VERSION=0.69.3
 # Tee stdout and stderr to both the terminal and a recipe log file while
 # preserving the original streams. Requires bash (process substitution).
 # Usage: append $(call _tee-log,<name>) to the end of a { ... } group,
@@ -11,6 +12,7 @@ _LOG_DIR := $(DEV_DIR)/logs
 _tee-log = > >(tee -a "$(_LOG_DIR)/$(1).log") 2> >(tee -a "$(_LOG_DIR)/$(1).log" >&2)
 GITHUB_OWNER=aidanhall34
 IMAGE_NAME=ghcr.io/$(GITHUB_OWNER)/make-mcp
+TEST_IMAGE_NAME=$(IMAGE_NAME)-test
 # OTEL_TEST_ENDPOINT controls where test spans and metrics are sent during a
 # container build. Override with an empty string to disable test telemetry.
 OTEL_TEST_ENDPOINT ?= http://localhost:4317
@@ -194,6 +196,70 @@ lint-go:
 	} $(call _tee-log,lint-go) ; \
 	wait
 
+# @ name: Scan Secrets
+# @ description: Scans the repository for secrets using TruffleHog in a Docker container.
+# @ risk: low
+# @ read-only: true
+# @ destructive: false
+# @ idempotent: true
+# @ open-world: true
+# @ param: none
+# @ output: TruffleHog scan results
+# @ output-type: text/plain
+scan-secrets:
+	@mkdir -p "$(_LOG_DIR)"
+	@{ docker run --rm -v "$(CURDIR):/pwd" trufflesecurity/trufflehog:$(TRUFFLEHOG_VERSION) git file:///pwd --only-verified --fail ; } \
+		$(call _tee-log,scan-secrets) ; \
+	wait
+
+# @ name: Scan Vulnerabilities
+# @ description: Scans the repository for vulnerabilities using Trivy in a Docker container.
+# @ risk: low
+# @ read-only: true
+# @ destructive: false
+# @ idempotent: true
+# @ open-world: true
+# @ param: none
+# @ output: Trivy vulnerability scan results
+# @ output-type: text/plain
+scan-vulnerabilities:
+	@mkdir -p "$(_LOG_DIR)"
+	@{ docker run --rm -v "$(CURDIR):/root" aquasec/trivy:$(TRIVY_VERSION) fs --exit-code 1 --severity HIGH,CRITICAL /root ; } \
+		$(call _tee-log,scan-vulnerabilities) ; \
+	wait
+
+# @ name: Scan Container
+# @ description: Scans the locally built make-mcp container image for vulnerabilities using Trivy in a Docker container. Requires IMAGE_TAG (default: latest).
+# @ risk: low
+# @ read-only: true
+# @ destructive: false
+# @ idempotent: true
+# @ open-world: true
+# @ param: IMAGE_TAG string | Container image tag to scan (default: latest)
+# @ output: Trivy container scan results
+# @ output-type: text/plain
+scan-container:
+	@mkdir -p "$(_LOG_DIR)"
+	@{ docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:$(TRIVY_VERSION) image --exit-code 1 --severity HIGH,CRITICAL "$(IMAGE_NAME):$(IMAGE_TAG)" ; } \
+		$(call _tee-log,scan-container) ; \
+	wait
+
+# @ name: Scan Test Container
+# @ description: Scans the locally built make-mcp test container image for vulnerabilities using Trivy in a Docker container. Requires IMAGE_TAG (default: latest).
+# @ risk: low
+# @ read-only: true
+# @ destructive: false
+# @ idempotent: true
+# @ open-world: true
+# @ param: IMAGE_TAG string | Container image tag to scan (default: latest)
+# @ output: Trivy container scan results
+# @ output-type: text/plain
+scan-test-container:
+	@mkdir -p "$(_LOG_DIR)"
+	@{ docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:$(TRIVY_VERSION) image --exit-code 1 --severity HIGH,CRITICAL "$(TEST_IMAGE_NAME):$(IMAGE_TAG)" ; } \
+		$(call _tee-log,scan-test-container) ; \
+	wait
+
 # @ name: Lint
 # @ description: Runs repository linting and validation checks required by CI.
 # @ risk: low
@@ -216,7 +282,7 @@ lint: lint-go lint-markdown lint-tidy validate
 # @ param: none
 # @ output: Binaries at ./bin/
 # @ output-type: application/octet-stream
-build: tests build-validator build-mcp-server integration-build-k6 build-container
+build: tests build-validator build-mcp-server integration-build-k6 build-container build-test-container
 
 # Sets up Grafana LGTM versions, configures a symlink so GEMINI.md can read the AGENTS.md file,
 # and installs a git pre-commit hook that runs lint and unit tests before each commit.
@@ -232,16 +298,16 @@ setup:
 
 .PHONY: pre-commit
 # @ name: Pre-commit
-# @ description: Runs linting and unit tests. Installed as a git pre-commit hook by the setup recipe.
+# @ description: Runs linting, unit tests, and security scans. Installed as a git pre-commit hook by the setup recipe.
 # @ risk: low
 # @ read-only: true
 # @ destructive: false
 # @ idempotent: true
 # @ open-world: false
 # @ param: none
-# @ output: Lint and test results
+# @ output: Lint, test, and scan results
 # @ output-type: text/plain
-pre-commit: lint unit-tests
+pre-commit: lint unit-tests scan-secrets scan-vulnerabilities
 
 # @ name: Build Validator
 # @ description: Compiles the makefile validator CLI binary to ./bin/make-mcp-validate.
@@ -470,6 +536,28 @@ build-container:
 	} $(call _tee-log,build-container) ; \
 	wait
 
+.PHONY: build-test-container
+# @ name: Build Test Container
+# @ description: Builds a minimal testing container for CI that includes make and other utilities. This image is used for integration tests and serves as an example for users.
+# @ risk: low
+# @ read-only: false
+# @ destructive: false
+# @ idempotent: true
+# @ open-world: false
+# @ param: IMAGE_TAG string | Container image tag to apply (default: latest)
+# @ output: Docker build output
+# @ output-type: application/octet-stream
+build-test-container: build-container
+	@mkdir -p "$(_LOG_DIR)"
+	@{ \
+		docker build --progress=rawjson \
+			--build-arg "MAKE_MCP_IMAGE=$(IMAGE_NAME):$(IMAGE_TAG)" \
+			-t "$(TEST_IMAGE_NAME):$(IMAGE_TAG)" \
+			-f "$(DEV_DIR)/integration/Dockerfile.test-server" \
+			"$(DEV_DIR)/integration" ; \
+	} $(call _tee-log,build-test-container) ; \
+	wait
+
 # @ name: Publish Container
 # @ description: Builds and pushes the make-mcp container image to the GitHub Container Registry. Requires IMAGE_TAG (default: latest). Authenticates via the gh CLI.
 # @ risk: high
@@ -526,7 +614,7 @@ _SERVER_OTEL_ENV := OTEL_TRACES_EXPORTER=$(OTEL_TRACES_EXPORTER) \
 
 # All env vars forwarded to every integration container.
 _INTEGRATION_RUN_ENV = \
-	MAKE_MCP_IMAGE="$(IMAGE_NAME):$(IMAGE_TAG)" \
+	MAKE_MCP_IMAGE="$(TEST_IMAGE_NAME):$(IMAGE_TAG)" \
 	K6_IMAGE="$(K6_IMAGE)" \
 	K6_SCRIPT="$(K6_SCRIPT)" \
 	$(_SERVER_OTEL_ENV) \
@@ -690,7 +778,7 @@ integration-otel: integration-build-k6 build-container
 	$(call _integration-run,$(_INTEGRATION_OTEL_COMPOSE))
 
 .PHONY: integration-act
-integration-act: integration-build-k6 build-container dev-up-lgtm
+integration-act: integration-build-k6 build-container build-test-container dev-up-lgtm
 	$(call _integration-run,$(_INTEGRATION_OTEL_COMPOSE))
 
 .PHONY: build-binaries
@@ -877,11 +965,11 @@ test-binary:
 # @ param: IMAGE_TAG string | Tag of the pre-loaded container image (default: git tag or short SHA)
 # @ output: Pass/fail summary for the container smoke test
 # @ output-type: text/plain
-smoke-test-container:
+smoke-test-container: build-test-container
 	@mkdir -p "$(_LOG_DIR)"
 	@{ \
 		set -e ; \
-		image="$(IMAGE_NAME):$(IMAGE_TAG)" ; \
+		image="$(TEST_IMAGE_NAME):$(IMAGE_TAG)" ; \
 		container_name="make-mcp-smoke-$(ARCH)" ; \
 		printf 'smoke testing container %s (%s)...\n' "$$image" "$(ARCH)" ; \
 		docker rm -f "$$container_name" 2>/dev/null || true ; \

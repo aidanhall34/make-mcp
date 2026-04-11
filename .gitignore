@@ -6,3 +6,4 @@ dev/tmp
 GEMINI.md
 coverage.out
 .act.secrets
+.cache

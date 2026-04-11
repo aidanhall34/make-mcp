@@ -1,6 +1,6 @@
 [mcp_servers.make-mcp]
 enabled = true
-command = "./bin/mcp-server"
+command = "./bin/make-mcp"
 args = ["--config", "make-mcp.yml"]
 [mcp_servers.make-mcp.env]
 OTEL_TRACES_EXPORTER = "otlp"

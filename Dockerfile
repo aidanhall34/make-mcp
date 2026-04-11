@@ -6,6 +6,7 @@ COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
 RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -o ./bin/make-mcp ./cmd/mcp-server
+RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -o ./bin/make-mcp-validate ./cmd/validate
 
 FROM golang:1.25 AS tests
 WORKDIR /build
@@ -28,12 +29,11 @@ RUN if [ "$TARGETARCH" = "arm64" ]; then \
         go test -race -cover -coverprofile=coverage.out ./... ; \
     fi
 
-FROM alpine:3.21 AS app
-# make is required at runtime: the server invokes it to run recipe targets.
-RUN apk add --no-cache make
-WORKDIR /opt/make-mcp
+FROM scratch AS app
+WORKDIR /
 # Force the tests stage: build fails here if coverage < 95%
 COPY --from=tests /build/coverage.out /tmp/coverage.out
-COPY --from=builder /build/bin/make-mcp ./make-mcp
-COPY make-mcp.yml ./make-mcp.yml
-ENTRYPOINT ["/opt/make-mcp/make-mcp", "--config", "/opt/make-mcp/make-mcp.yml"]
+COPY --from=builder /build/bin/make-mcp /make-mcp
+COPY --from=builder /build/bin/make-mcp-validate /make-mcp-validate
+COPY make-mcp.yml /make-mcp.yml
+ENTRYPOINT ["/make-mcp", "--config", "/make-mcp.yml"]

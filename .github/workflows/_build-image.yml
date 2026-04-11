@@ -46,9 +46,9 @@ jobs:
         uses: aquasecurity/trivy-action@master
         with:
           input: dist/make-mcp_${{ inputs.image-tag }}_linux_${{ inputs.arch }}.tar
-          format: 'table'
-          exit-code: '1'
-          severity: 'HIGH,CRITICAL'
+          format: "table"
+          exit-code: "1"
+          severity: "HIGH,CRITICAL"
 
       - name: Upload container tar artifact
         uses: actions/upload-artifact@v4

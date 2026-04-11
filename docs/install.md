@@ -27,34 +27,63 @@ CycloneDX SBOMs are attached as `sbom-release-<arch>.cdx.json`.
 
 ## Docker
 
-Container images are published to GHCR as multi-arch manifests (`linux/amd64`
-and `linux/arm64`).
+The official container image is a **minimal scratch image** containing only the
+`make-mcp` and `make-mcp-validate` binaries.
 
-```sh
-docker pull ghcr.io/aidanhall34/make-mcp:latest
+### Design Choice: Scratch Image
+
+Since this MCP server executes arbitrary `make` commands on your behalf, it is
+impossible to provide a single container image that includes all possible
+runtime dependencies (e.g., specific versions of compilers, linters, or deployment
+tools).
+
+Instead of providing a "fat" container, we provide a minimal one that serves
+as a source for the binaries. **You are expected to copy the `make-mcp` binary
+into your own custom dev container** where you manage your project's software
+versions.
+
+The only requirement for the runtime environment is that `make` (or your
+configured runner) must be available on the `PATH`.
+
+### Usage in Custom Containers
+
+To use `make-mcp` in your project's dev container, use a multi-stage build to
+copy the binary from our official image:
+
+```dockerfile
+# Your existing dev container or a base image with your dependencies
+FROM alpine:3.21
+
+# Install your project's dependencies (e.g. make, gcc, python, etc.)
+RUN apk add --no-cache make
+
+# Copy the make-mcp binary from the official scratch image
+COPY --from=ghcr.io/aidanhall34/make-mcp:latest /make-mcp /usr/local/bin/make-mcp
+
+# Start the server
+ENTRYPOINT ["make-mcp"]
 ```
 
-Available tags:
+For a complete example of a container with `make` and other testing utilities,
+see the [integration test container](../dev/integration/Dockerfile.test-server).
 
-| Tag | Meaning |
-|---|---|
-| `latest` | Most recent release |
-| `vX.Y.Z` | Immutable release tag |
-| `<short-sha>` | Commit reference |
+### Running the Scratch Image Directly
 
-Run with a volume-mounted Makefile:
+You can still run the scratch image directly if your host provides the
+necessary environment via volume mounts, but this is generally not
+recommended for production use:
 
 ```sh
 docker run --rm \
-  -v "$(pwd)/Makefile:/workspace/Makefile" \
-  -v "$(pwd)/make-mcp.yml:/opt/make-mcp/make-mcp.yml" \
-  -p 9378:9378 \
+  -v "$(pwd)/Makefile:/Makefile" \
+  -v "$(pwd)/make-mcp.yml:/make-mcp.yml" \
   ghcr.io/aidanhall34/make-mcp:latest \
-  --transport http --listen 0.0.0.0:9378
+  --makefile /Makefile --config /make-mcp.yml
 ```
 
-The entrypoint is `/opt/make-mcp/make-mcp`. The default config path inside the
-container is `/opt/make-mcp/make-mcp.yml`; override with `--config`.
+> **Note:** The scratch image does not have `sh`, `ls`, or even `make`
+> installed. It will fail to execute any tools if they rely on these being
+> present inside the container.
 
 ---
 
