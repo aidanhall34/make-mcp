@@ -1,9 +1,12 @@
 package main
 
 import (
+	"errors"
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -150,6 +153,198 @@ func TestExtractInstrumentField(t *testing.T) {
 		if got != tc.want {
 			t.Errorf("extractInstrumentField(%q) = %q, want %q", tc.src, got, tc.want)
 		}
+	}
+}
+
+func TestMetricDefUnitOrDash(t *testing.T) {
+	if (MetricDef{}).UnitOrDash() != "—" {
+		t.Error("empty unit should return em-dash")
+	}
+	m := MetricDef{Unit: "s"}
+	if got := m.UnitOrDash(); got != "s" {
+		t.Errorf("UnitOrDash() = %q, want %q", got, "s")
+	}
+}
+
+func TestNormalizeNewlines(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		want  string
+	}{
+		{"single trailing newline preserved", "hello\n", "hello\n"},
+		{"multiple trailing newlines collapsed to one", "hello\n\n\n", "hello\n"},
+		{"triple blank lines collapsed to double", "a\n\n\n\nb", "a\n\nb\n"},
+		{"no trailing newline gets one added", "hello", "hello\n"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := string(normalizeNewlines([]byte(tc.input)))
+			if got != tc.want {
+				t.Errorf("normalizeNewlines(%q) = %q, want %q", tc.input, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestBuildTemplateData_MissingFile(t *testing.T) {
+	_, err := buildTemplateData("nonexistent_file.go", "")
+	if err == nil {
+		t.Error("expected error for missing metrics file, got nil")
+	}
+}
+
+func TestRun(t *testing.T) {
+	dir := t.TempDir()
+
+	// Minimal valid Go source with an initMetrics function.
+	metricsGo := `package telemetry
+
+import "go.opentelemetry.io/otel/metric"
+
+type Instruments struct {
+	Calls metric.Int64Counter
+}
+
+func initMetrics(meter metric.Meter) Instruments {
+	var m Instruments
+	if m.Calls, _ = meter.Int64Counter("myapp_calls_total"); true {
+	}
+	return m
+}
+`
+	metricsFile := filepath.Join(dir, "metrics.go")
+	if err := os.WriteFile(metricsFile, []byte(metricsGo), 0o644); err != nil {
+		t.Fatalf("write metrics.go: %v", err)
+	}
+
+	tmplSrc := "# Metrics\n{{range .Counters}}- {{.Name}}\n{{end}}\n"
+	tmplFile := filepath.Join(dir, "metrics.md.tmpl")
+	if err := os.WriteFile(tmplFile, []byte(tmplSrc), 0o644); err != nil {
+		t.Fatalf("write tmpl: %v", err)
+	}
+
+	outFile := filepath.Join(dir, "Metrics.md")
+
+	t.Run("generates outdated file", func(t *testing.T) {
+		err := run(metricsFile, "", tmplFile, outFile)
+		if !errors.Is(err, errOutdated) {
+			t.Fatalf("expected errOutdated, got %v", err)
+		}
+		if _, statErr := os.Stat(outFile); statErr != nil {
+			t.Fatalf("output file not created: %v", statErr)
+		}
+	})
+
+	t.Run("up to date returns nil", func(t *testing.T) {
+		err := run(metricsFile, "", tmplFile, outFile)
+		if err != nil {
+			t.Fatalf("expected nil for up-to-date file, got %v", err)
+		}
+	})
+
+	t.Run("missing template file", func(t *testing.T) {
+		err := run(metricsFile, "", filepath.Join(dir, "no.tmpl"), outFile)
+		if err == nil {
+			t.Error("expected error for missing template, got nil")
+		}
+	})
+
+	t.Run("invalid template", func(t *testing.T) {
+		badTmpl := filepath.Join(dir, "bad.tmpl")
+		if err := os.WriteFile(badTmpl, []byte("{{.Invalid}"), 0o644); err != nil {
+			t.Fatalf("write bad tmpl: %v", err)
+		}
+		err := run(metricsFile, "", badTmpl, outFile)
+		if err == nil {
+			t.Error("expected error for invalid template, got nil")
+		}
+	})
+}
+
+func TestExtractLabelsFromFunc_VarAttrs(t *testing.T) {
+	src := `package p
+
+import (
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/metric"
+)
+
+func f(m struct{ Calls metric.Int64Counter }) {
+	attrs := metric.WithAttributes(attribute.String("env", "prod"))
+	m.Calls.Add(ctx, 1, attrs)
+}
+`
+	fset := token.NewFileSet()
+	f, err := parser.ParseFile(fset, "p.go", src, 0)
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	var fn *ast.FuncDecl
+	for _, decl := range f.Decls {
+		if fd, ok := decl.(*ast.FuncDecl); ok {
+			fn = fd
+			break
+		}
+	}
+	result := extractLabelsFromFunc(fn)
+	keys, ok := result["Calls"]
+	if !ok {
+		t.Fatal("expected label keys for Calls, got none")
+	}
+	if len(keys) != 1 || keys[0] != "env" {
+		t.Errorf("Calls labels = %v, want [env]", keys)
+	}
+}
+
+func TestExtractMetricDefs(t *testing.T) {
+	src := `package p
+
+import "go.opentelemetry.io/otel/metric"
+
+func initMetrics(meter metric.Meter) {
+	var m struct {
+		Hits   metric.Int64Counter
+		Dur    metric.Float64Histogram
+		Active metric.Int64UpDownCounter
+	}
+	if m.Hits, _ = meter.Int64Counter("app_hits_total",
+		metric.WithDescription("Number of hits."),
+	); true {}
+	if m.Dur, _ = meter.Float64Histogram("app_duration_seconds",
+		metric.WithUnit("s"),
+	); true {}
+	if m.Active, _ = meter.Int64UpDownCounter("app_active"); true {}
+}
+`
+	fset := token.NewFileSet()
+	f, err := parser.ParseFile(fset, "p.go", src, 0)
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	var fn *ast.FuncDecl
+	for _, decl := range f.Decls {
+		if fd, ok := decl.(*ast.FuncDecl); ok {
+			fn = fd
+			break
+		}
+	}
+	orderedFields, fieldMap := extractMetricDefs(fn)
+	if len(orderedFields) != 3 {
+		t.Fatalf("orderedFields = %v, want 3 entries", orderedFields)
+	}
+
+	hits := fieldMap["Hits"]
+	if hits.Name != "app_hits_total" || hits.Type != TypeCounter || hits.Description != "Number of hits." {
+		t.Errorf("Hits = %+v", hits)
+	}
+	dur := fieldMap["Dur"]
+	if dur.Name != "app_duration_seconds" || dur.Type != TypeHistogram || dur.Unit != "s" {
+		t.Errorf("Dur = %+v", dur)
+	}
+	active := fieldMap["Active"]
+	if active.Name != "app_active" || active.Type != TypeGauge {
+		t.Errorf("Active = %+v", active)
 	}
 }
 
