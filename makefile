@@ -1,6 +1,14 @@
-SHELL=/usr/bin/env sh
+SHELL=/usr/bin/env bash
 LGTM_VERSION:= 0.23.0
 DEV_DIR=./dev
+_LOG_DIR := $(DEV_DIR)/logs
+
+# Tee stdout and stderr to both the terminal and a recipe log file while
+# preserving the original streams. Requires bash (process substitution).
+# Usage: append $(call _tee-log,<name>) to the end of a { ... } group,
+# followed by ; wait to flush the tee coprocesses before the shell exits.
+# $(1) = log file basename (written to _LOG_DIR/NAME.log)
+_tee-log = > >(tee -a "$(_LOG_DIR)/$(1).log") 2> >(tee -a "$(_LOG_DIR)/$(1).log" >&2)
 GITHUB_OWNER=aidanhall34
 IMAGE_NAME=ghcr.io/$(GITHUB_OWNER)/make-mcp
 # OTEL_TEST_ENDPOINT controls where test spans and metrics are sent during a
@@ -82,7 +90,10 @@ tests: unit-tests bench
 # @ output: Test results, per-file coverage JSON, and pass/fail summary
 # @ output-type: text/plain
 unit-tests:
-	go test -race -cover -coverprofile=coverage.out ./...
+	@mkdir -p "$(_LOG_DIR)"
+	@{ go test -race -cover -coverprofile=coverage.out ./... ; } \
+		$(call _tee-log,unit-tests) ; \
+	wait
 
 # @ name: Benchmark
 # @ description: Runs all Go benchmark tests across every package and reports memory allocations.
@@ -95,7 +106,10 @@ unit-tests:
 # @ output: Benchmark results with ns/op, B/op, and allocs/op per benchmark
 # @ output-type: text/plain
 bench:
-	go test -bench=. -benchmem -run='^$$' ./...
+	@mkdir -p "$(_LOG_DIR)"
+	@{ go test -bench=. -benchmem -run='^$$' ./... ; } \
+		$(call _tee-log,bench) ; \
+	wait
 
 # @ name: Format
 # @ description: Formats all Go source and test files in the cmd and pkg directories.
@@ -135,8 +149,12 @@ tidy:
 # @ output: Git diff exit code and any required changes
 # @ output-type: text/plain
 lint-tidy:
-	go mod tidy
-	git diff --exit-code "go.mod" "go.sum"
+	@mkdir -p "$(_LOG_DIR)"
+	@{ \
+		go mod tidy ; \
+		git diff --exit-code "go.mod" "go.sum" ; \
+	} $(call _tee-log,lint-tidy) ; \
+	wait
 
 # @ name: Lint Markdown
 # @ description: Lints all markdown files in the repository with markdownlint.
@@ -149,7 +167,10 @@ lint-tidy:
 # @ output: Markdown lint results and any rule violations
 # @ output-type: text/plain
 lint-markdown:
-	npm run lint:markdown
+	@mkdir -p "$(_LOG_DIR)"
+	@{ npm run lint:markdown ; } \
+		$(call _tee-log,lint-markdown) ; \
+	wait
 
 # @ name: Lint Go
 # @ description: Verifies that Go files are formatted and pass go vet.
@@ -162,6 +183,7 @@ lint-markdown:
 # @ output: gofmt check results and go vet diagnostics
 # @ output-type: text/plain
 lint-go:
+	@mkdir -p "$(_LOG_DIR)"
 	@{ \
 		out="$$(gofmt -l $$(find ./cmd ./pkg ./internal -name '*.go' -type f))" ; \
 		if [ -n "$$out" ]; then \
@@ -169,7 +191,8 @@ lint-go:
 			exit 1 ; \
 		fi ; \
 		go vet ./... ; \
-	}
+	} $(call _tee-log,lint-go) ; \
+	wait
 
 # @ name: Lint
 # @ description: Runs repository linting and validation checks required by CI.
@@ -206,6 +229,8 @@ setup:
 	printf '#!/usr/bin/env sh\nnpx --no -- commitlint --edit "$$1"\n' > .git/hooks/commit-msg
 	chmod +x .git/hooks/commit-msg
 
+
+.PHONY: pre-commit
 # @ name: Pre-commit
 # @ description: Runs linting and unit tests. Installed as a git pre-commit hook by the setup recipe.
 # @ risk: low
@@ -216,34 +241,39 @@ setup:
 # @ param: none
 # @ output: Lint and test results
 # @ output-type: text/plain
-.PHONY: pre-commit
 pre-commit: lint unit-tests
 
 # @ name: Build Validator
-# @ description: Compiles the makefile validator CLI binary to ./bin/validate.
+# @ description: Compiles the makefile validator CLI binary to ./bin/make-mcp-validate.
 # @ risk: low
 # @ read-only: false
 # @ destructive: false
 # @ idempotent: true
 # @ open-world: false
 # @ param: none
-# @ output: Binary at ./bin/validate
+# @ output: Binary at ./bin/make-mcp-validate
 # @ output-type: application/octet-stream
 build-validator:
-	go build -o ./bin/validate ./cmd/validate
+	@mkdir -p "$(_LOG_DIR)"
+	@{ go build -o ./bin/make-mcp-validate ./cmd/validate ; } \
+		$(call _tee-log,build-validator) ; \
+	wait
 
 # @ name: Build MCP Server
-# @ description: Compiles the MCP server CLI binary to ./bin/mcp-server.
+# @ description: Compiles the MCP server CLI binary to ./bin/make-mcp.
 # @ risk: low
 # @ read-only: false
 # @ destructive: false
 # @ idempotent: true
 # @ open-world: false
 # @ param: none
-# @ output: Binary at ./bin/mcp-server
+# @ output: Binary at ./bin/make-mcp
 # @ output-type: application/octet-stream
 build-mcp-server:
-	go build -o ./bin/mcp-server ./cmd/mcp-server
+	@mkdir -p "$(_LOG_DIR)"
+	@{ go build -o ./bin/make-mcp ./cmd/mcp-server ; } \
+		$(call _tee-log,build-mcp-server) ; \
+	wait
 
 # @ name: Run
 # @ description: Compiles and runs the MCP server locally using the default configuration.
@@ -256,7 +286,7 @@ build-mcp-server:
 # @ output: MCP server logs
 # @ output-type: text/plain
 run: build
-	"./bin/mcp-server" -config "make-mcp.yml"
+	"./bin/make-mcp" -config "make-mcp.yml"
 
 # @ name: Install
 # @ description: Installs the mcp-server and validator binaries to the user's Go bin directory.
@@ -283,7 +313,7 @@ install:
 # @ output: Validation report listing all annotated recipes and any errors
 # @ output-type: text/plain
 validate:
-	go run ./cmd/validate --config make-mcp.yml
+	go run ./cmd/validate --config make-mcp.yml --strict
 
 # @ name: Hello World
 # @ description: Prints a friendly greeting. Used to verify the MCP server toolchain is operational.
@@ -419,6 +449,7 @@ dev-logs:
 dev-logs-tail:
 	$(_DEV_COMPOSE_ENV) docker compose $(_DEV_FULL_COMPOSE) logs -f
 
+.PHONY: build-container
 # @ name: Build Container
 # @ description: Builds the make-mcp container image locally. Requires IMAGE_TAG (default: latest). All tests must pass their per-package coverage thresholds or the build fails.
 # @ risk: low
@@ -426,15 +457,18 @@ dev-logs-tail:
 # @ destructive: false
 # @ idempotent: true
 # @ open-world: false
-# @ param: IMAGE_TAG - Container image tag to apply to the built image (default: latest)
+# @ param: IMAGE_TAG string | Container image tag to apply to the built image (default: latest)
 # @ output: Docker build output as JSON progress records
 # @ output-type: application/json
-.PHONY: build-container
 build-container:
-	docker build --progress=rawjson \
-		--add-host "host.docker.internal:host-gateway" \
-		--build-arg "OTEL_EXPORTER_OTLP_ENDPOINT=$(OTEL_TEST_ENDPOINT)" \
-		-t "$(IMAGE_NAME):$(IMAGE_TAG)" .
+	@mkdir -p "$(_LOG_DIR)"
+	@{ \
+		docker build --progress=rawjson \
+			--add-host "host.docker.internal:host-gateway" \
+			--build-arg "OTEL_EXPORTER_OTLP_ENDPOINT=$(OTEL_TEST_ENDPOINT)" \
+			-t "$(IMAGE_NAME):$(IMAGE_TAG)" . ; \
+	} $(call _tee-log,build-container) ; \
+	wait
 
 # @ name: Publish Container
 # @ description: Builds and pushes the make-mcp container image to the GitHub Container Registry. Requires IMAGE_TAG (default: latest). Authenticates via the gh CLI.
@@ -587,9 +621,9 @@ define _integration-run-binary
 	@{ \
 		set -e ; \
 		mkdir -p "$(DEV_DIR)/tmp" ; \
-		mcp_server="$(DIST_DIR)/mcp-server_linux_$(ARCH)" ; \
+		mcp_server="$(DIST_DIR)/make-mcp_linux_$(ARCH)" ; \
 		chmod +x "$$mcp_server" ; \
-		printf 'starting mcp-server for binary integration (%s)...\n' "$(ARCH)" ; \
+		printf 'starting make-mcp for binary integration (%s)...\n' "$(ARCH)" ; \
 		"$$mcp_server" \
 			--config "$(DEV_DIR)/integration/make-mcp.yml" \
 			--makefile "testdata/Makefile" & \
@@ -659,6 +693,7 @@ integration-otel: integration-build-k6 build-container
 integration-act: integration-build-k6 build-container dev-up-lgtm
 	$(call _integration-run,$(_INTEGRATION_OTEL_COMPOSE))
 
+.PHONY: build-binaries
 # @ name: Build Binaries
 # @ description: Cross-compiles mcp-server and validate for the target Linux architecture and writes them to ./dist. Used by CI to produce per-arch artifacts before packaging.
 # @ risk: low
@@ -667,18 +702,20 @@ integration-act: integration-build-k6 build-container dev-up-lgtm
 # @ idempotent: true
 # @ open-world: false
 # @ param: ARCH string | Target architecture: amd64 or arm64 (default: amd64)
-# @ output: Binaries written to ./dist/mcp-server_linux_ARCH and ./dist/validate_linux_ARCH
+# @ output: Binaries written to ./dist/make-mcp_linux_ARCH and ./dist/make-mcp-validate_linux_ARCH
 # @ output-type: application/octet-stream
-.PHONY: build-binaries
 build-binaries:
+	@mkdir -p "$(_LOG_DIR)"
 	@{ \
 		set -e ; \
 		mkdir -p "$(DIST_DIR)" ; \
-		CGO_ENABLED="0" GOOS="linux" GOARCH="$(ARCH)" go build -o "$(DIST_DIR)/mcp-server_linux_$(ARCH)" ./cmd/mcp-server ; \
-		CGO_ENABLED="0" GOOS="linux" GOARCH="$(ARCH)" go build -o "$(DIST_DIR)/validate_linux_$(ARCH)" ./cmd/validate ; \
+		CGO_ENABLED="0" GOOS="linux" GOARCH="$(ARCH)" go build -o "$(DIST_DIR)/make-mcp_linux_$(ARCH)" ./cmd/mcp-server ; \
+		CGO_ENABLED="0" GOOS="linux" GOARCH="$(ARCH)" go build -o "$(DIST_DIR)/make-mcp-validate_linux_$(ARCH)" ./cmd/validate ; \
 		printf 'built %s %s\n' "$(ARCH)" "$$(ls -1 "$(DIST_DIR)"/*_linux_$(ARCH))" ; \
-	}
+	} $(call _tee-log,build-binaries-$(ARCH)) ; \
+	wait
 
+.PHONY: build-container-tar
 # @ name: Build Container Tar
 # @ description: Builds the make-mcp container image for a single Linux architecture using docker buildx and saves it as a tar to ./dist. Requires a docker-container buildx builder (set up by docker/setup-buildx-action in CI). OTEL_TEST_ENDPOINT is passed as a build arg to capture build-time telemetry.
 # @ risk: low
@@ -691,8 +728,8 @@ build-binaries:
 # @ param: OTEL_TEST_ENDPOINT string | OTLP endpoint for build-time telemetry (default: http://localhost:4317)
 # @ output: Container image tar at ./dist/make-mcp_IMAGE_TAG_linux_ARCH.tar
 # @ output-type: application/octet-stream
-.PHONY: build-container-tar
 build-container-tar:
+	@mkdir -p "$(_LOG_DIR)"
 	@{ \
 		set -e ; \
 		mkdir -p "$(DIST_DIR)" ; \
@@ -704,8 +741,10 @@ build-container-tar:
 			-t "$(IMAGE_NAME):$(IMAGE_TAG)" \
 			. ; \
 		printf 'saved %s\n' "$(DIST_DIR)/make-mcp_$(IMAGE_TAG)_linux_$(ARCH).tar" ; \
-	}
+	} $(call _tee-log,build-container-tar-$(ARCH)) ; \
+	wait
 
+.PHONY: package-release-archive
 # @ name: Package Release Archive
 # @ description: Packages pre-built mcp-server and validate binaries from ./dist together with README.md and make-mcp.yml into a .tar.gz release archive for the given version and architecture. Run build-binaries first to produce the binaries.
 # @ risk: low
@@ -717,7 +756,6 @@ build-container-tar:
 # @ param: ARCH string | Target architecture: amd64 or arm64 (default: amd64)
 # @ output: Release archive at ./dist/make-mcp_VERSION_linux_ARCH.tar.gz
 # @ output-type: application/octet-stream
-.PHONY: package-release-archive
 package-release-archive:
 	@{ \
 		set -e ; \
@@ -730,8 +768,8 @@ package-release-archive:
 		trap 'rm -rf "$$tmpdir"' EXIT ; \
 		stage="$$tmpdir/make-mcp_$(VERSION)_linux_$(ARCH)" ; \
 		mkdir -p "$$stage" ; \
-		cp "$(DIST_DIR)/mcp-server_linux_$(ARCH)" "$$stage/mcp-server" ; \
-		cp "$(DIST_DIR)/validate_linux_$(ARCH)" "$$stage/validate" ; \
+		cp "$(DIST_DIR)/make-mcp_linux_$(ARCH)" "$$stage/make-mcp" ; \
+		cp "$(DIST_DIR)/make-mcp-validate_linux_$(ARCH)" "$$stage/make-mcp-validate" ; \
 		cp README.md "$$stage/README.md" ; \
 		cp make-mcp.yml "$$stage/make-mcp.yml" ; \
 		tar -czf "$(DIST_DIR)/make-mcp_$(VERSION)_linux_$(ARCH).tar.gz" \
@@ -739,6 +777,7 @@ package-release-archive:
 		printf '%s\n' "$(DIST_DIR)/make-mcp_$(VERSION)_linux_$(ARCH).tar.gz" ; \
 	}
 
+.PHONY: build-release-archives
 # @ name: Build Release Archives
 # @ description: Builds Linux amd64 and arm64 release tar.gz archives in ./dist for the provided semantic version tag. Convenience wrapper around build-binaries and package-release-archive for both arches.
 # @ risk: low
@@ -749,13 +788,13 @@ package-release-archive:
 # @ param: VERSION string | Semantic version tag to package, for example v1.2.3
 # @ output: Release tar.gz archives written to ./dist
 # @ output-type: application/octet-stream
-.PHONY: build-release-archives
 build-release-archives:
 	$(MAKE) build-binaries ARCH=amd64
 	$(MAKE) build-binaries ARCH=arm64
 	$(MAKE) package-release-archive ARCH=amd64 VERSION=$(VERSION)
 	$(MAKE) package-release-archive ARCH=arm64 VERSION=$(VERSION)
 
+.PHONY: integration-prebuilt
 # @ name: Integration Tests (prebuilt image)
 # @ description: Runs MCP protocol integration tests using a container image that is already loaded in the local Docker daemon. Does not build the image. Set IMAGE_NAME and IMAGE_TAG to match the loaded image, and K6_SCRIPT to select the test script.
 # @ risk: medium
@@ -767,7 +806,6 @@ build-release-archives:
 # @ param: K6_SCRIPT string | Path inside the k6 container to the test script (default: /scripts/integration.js)
 # @ output: k6 integration test results and pass/fail summary
 # @ output-type: text/plain
-.PHONY: integration-prebuilt
 integration-prebuilt: integration-build-k6
 	$(call _integration-run,$(_INTEGRATION_STACK_COMPOSE))
 
@@ -786,6 +824,7 @@ integration-prebuilt: integration-build-k6
 integration-binary: integration-build-k6
 	$(call _integration-run-binary,$(_INTEGRATION_BINARY_RUNNER_COMPOSE))
 
+.PHONY: test-binary
 # @ name: Binary Smoke Tests
 # @ description: Runs smoke tests against the pre-built mcp-server and validate binaries in ./dist for the target architecture. Verifies that validate accepts the project makefile, starts the MCP server in HTTP mode, polls /ready, and confirms it responds. On an amd64 host, arm64 binaries require QEMU binfmt_misc registration (provided automatically by docker/setup-qemu-action in CI).
 # @ risk: low
@@ -796,19 +835,19 @@ integration-binary: integration-build-k6
 # @ param: ARCH string | Target architecture: amd64 or arm64 (default: amd64)
 # @ output: Pass/fail summary for each binary
 # @ output-type: text/plain
-.PHONY: test-binary
 test-binary:
+	@mkdir -p "$(_LOG_DIR)"
 	@{ \
 		set -e ; \
-		mcp_server="$(DIST_DIR)/mcp-server_linux_$(ARCH)" ; \
-		validate_bin="$(DIST_DIR)/validate_linux_$(ARCH)" ; \
+		mcp_server="$(DIST_DIR)/make-mcp_linux_$(ARCH)" ; \
+		validate_bin="$(DIST_DIR)/make-mcp-validate_linux_$(ARCH)" ; \
 		for f in "$$mcp_server" "$$validate_bin"; do \
 			[ -f "$$f" ] || { printf 'binary not found: %s\n' "$$f" ; exit 1 ; } ; \
 			chmod +x "$$f" ; \
 		done ; \
-		printf 'smoke testing validate (%s)...\n' "$(ARCH)" ; \
+		printf 'smoke testing make-mcp-validate (%s)...\n' "$(ARCH)" ; \
 		"$$validate_bin" --config make-mcp.yml ; \
-		printf 'starting mcp-server in HTTP mode (%s)...\n' "$(ARCH)" ; \
+		printf 'starting make-mcp in HTTP mode (%s)...\n' "$(ARCH)" ; \
 		"$$mcp_server" \
 			--config "$(DEV_DIR)/integration/make-mcp.yml" \
 			--makefile "testdata/Makefile" & \
@@ -823,8 +862,10 @@ test-binary:
 		printf 'mcp-server ready (%s)\n' "$(ARCH)" ; \
 		curl -sf "http://localhost:9378/ready" ; \
 		printf '\nbinary smoke tests passed (%s)\n' "$(ARCH)" ; \
-	}
+	} $(call _tee-log,test-binary-$(ARCH)) ; \
+	wait
 
+.PHONY: smoke-test-container
 # @ name: Container Smoke Test
 # @ description: Runs a container smoke test against the pre-loaded image for the target architecture. Starts the container in HTTP mode with testdata/Makefile mounted, polls /ready, and confirms it responds. On an amd64 host, arm64 images require QEMU (provided by docker/setup-qemu-action in CI).
 # @ risk: low
@@ -836,8 +877,8 @@ test-binary:
 # @ param: IMAGE_TAG string | Tag of the pre-loaded container image (default: git tag or short SHA)
 # @ output: Pass/fail summary for the container smoke test
 # @ output-type: text/plain
-.PHONY: smoke-test-container
 smoke-test-container:
+	@mkdir -p "$(_LOG_DIR)"
 	@{ \
 		set -e ; \
 		image="$(IMAGE_NAME):$(IMAGE_TAG)" ; \
@@ -860,7 +901,8 @@ smoke-test-container:
 		printf 'container ready\n' ; \
 		curl -sf "http://localhost:9378/ready" ; \
 		printf '\ncontainer smoke test passed (%s)\n' "$(ARCH)" ; \
-	}
+	} $(call _tee-log,smoke-test-container-$(ARCH)) ; \
+	wait
 
 # @ name: Upload Discord Webhook Secret
 # @ description: Stores a Discord webhook URL as the DISCORD_WEBHOOK_URL GitHub Actions secret using the gh CLI, and also writes it to the local ACT_SECRET_FILE (.act.secrets) so act can read it when running workflows locally.
@@ -905,6 +947,7 @@ upload-discord-webhook:
 # @ output-type: text/plain
 .PHONY: act-run
 act-run:
+	@mkdir -p "$(_LOG_DIR)"
 	@{ \
 		set -e ; \
 		act_args="" ; \
@@ -931,7 +974,8 @@ act-run:
 			--concurrent-jobs "$(ACT_CONCURRENT_JOBS)" \
 			$(ACT_EVENT) \
 			$$act_args ; \
-	}
+	} $(call _tee-log,act-run) ; \
+	wait
 
 # Runs a local instance of the mcp inspector for debugging
 dev-mcp-inspector: build
@@ -941,5 +985,5 @@ dev-mcp-inspector: build
 		-e "OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4317" \
 		-e "OTEL_EXPORTER_OTLP_INSECURE=true" \
 		-e "OTEL_METRIC_EXPORT_INTERVAL=5000" \
-		-- ./bin/mcp-server \
+		-- ./bin/make-mcp \
 		--config make-mcp.yml ;

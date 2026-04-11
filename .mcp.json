@@ -6,7 +6,7 @@
         },
         "make-mcp": {
           "type": "stdio",
-            "command": "./bin/mcp-server",
+            "command": "./bin/make-mcp",
             "args": ["--config", "make-mcp.yml"],
             "env": {
                 "OTEL_TRACES_EXPORTER": "otlp",

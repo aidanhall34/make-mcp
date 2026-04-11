@@ -1,0 +1,17 @@
+name: build-releases
+
+on:
+  push:
+
+jobs:
+  build-releases:
+    name: build-releases
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [amd64, arm64]
+    uses: ./.github/workflows/_build-release.yml
+    with:
+      arch: ${{ matrix.arch }}
+    secrets:
+      DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}

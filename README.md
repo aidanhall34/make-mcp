@@ -244,29 +244,28 @@ the server returns an MCP error instead of a successful tool result.
 - Non-zero exit codes fail with a structured error that includes the exit code,
   stdout, and stderr.
 
+## Installation
+
+See [docs/install.md](docs/install.md) for instructions to install from GitHub
+Releases, Docker, `go install`, or build from source.
+
 ## Development
 
 ```sh
+# Install git hooks and Node.js dev dependencies
+make setup
+
 # Run all tests
 make tests
 
-# Build the validator binary
-make build-validator
-
-# Build the MCP server binary
-make build-mcp-server
-
-# Build all binaries (also runs tests)
+# Build both binaries into ./bin/
 make build
 
 # Validate the project Makefile
 make validate
 
-# Install markdown linting dependencies
-npm install
-
-# Lint markdown files
-make lint-markdown
+# Lint everything
+make lint
 ```
 
 Tests are written before implementation (TDD). Run `make tests` after every

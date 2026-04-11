@@ -5,7 +5,7 @@ WORKDIR /build
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
-RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -o ./bin/mcp-server ./cmd/mcp-server
+RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -o ./bin/make-mcp ./cmd/mcp-server
 
 FROM golang:1.25 AS tests
 WORKDIR /build
@@ -34,6 +34,6 @@ RUN apk add --no-cache make
 WORKDIR /opt/make-mcp
 # Force the tests stage: build fails here if coverage < 95%
 COPY --from=tests /build/coverage.out /tmp/coverage.out
-COPY --from=builder /build/bin/mcp-server ./mcp-server
+COPY --from=builder /build/bin/make-mcp ./make-mcp
 COPY make-mcp.yml ./make-mcp.yml
-ENTRYPOINT ["/opt/make-mcp/mcp-server", "--config", "/opt/make-mcp/make-mcp.yml"]
+ENTRYPOINT ["/opt/make-mcp/make-mcp", "--config", "/opt/make-mcp/make-mcp.yml"]
