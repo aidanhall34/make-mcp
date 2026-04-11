@@ -11,7 +11,6 @@ delimiter: "@"
 # Paths are relative to the working directory where the tool is run.
 makefiles:
   - ./makefile
-  - ./dev/makefiles/ci.mk
 
 # strict: require every supported recipe annotation.
 # When true, optional MCP tool hints (read-only, destructive, idempotent,

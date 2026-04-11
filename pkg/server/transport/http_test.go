@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -115,6 +116,51 @@ func TestHTTPServer_Start(t *testing.T) {
 		}
 	case <-time.After(2 * time.Second):
 		t.Fatal("Start() did not return after Shutdown")
+	}
+}
+
+func TestCORSMiddleware_SetsHeaders(t *testing.T) {
+	handler := corsMiddleware(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	req := httptest.NewRequest(http.MethodPost, "/mcp", nil)
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Errorf("status = %d, want %d", rr.Code, http.StatusOK)
+	}
+	if got := rr.Header().Get("Access-Control-Allow-Origin"); got != "*" {
+		t.Errorf("Access-Control-Allow-Origin = %q, want %q", got, "*")
+	}
+	if got := rr.Header().Get("Access-Control-Expose-Headers"); got != "mcp-session-id" {
+		t.Errorf("Access-Control-Expose-Headers = %q, want %q", got, "mcp-session-id")
+	}
+}
+
+func TestCORSMiddleware_PreflightOptions(t *testing.T) {
+	handler := corsMiddleware(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		t.Error("inner handler should not be called for OPTIONS preflight")
+	}))
+
+	req := httptest.NewRequest(http.MethodOptions, "/mcp", nil)
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusNoContent {
+		t.Errorf("status = %d, want %d", rr.Code, http.StatusNoContent)
+	}
+	for _, h := range []string{"Access-Control-Allow-Methods", "Access-Control-Allow-Headers"} {
+		if rr.Header().Get(h) == "" {
+			t.Errorf("%s header missing on preflight response", h)
+		}
+	}
+	allowedHeaders := rr.Header().Get("Access-Control-Allow-Headers")
+	for _, want := range []string{"mcp-session-id", "mcp-protocol-version"} {
+		if !strings.Contains(allowedHeaders, want) {
+			t.Errorf("Access-Control-Allow-Headers missing %q, got %q", want, allowedHeaders)
+		}
 	}
 }
 

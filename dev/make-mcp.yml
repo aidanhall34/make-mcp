@@ -5,6 +5,13 @@ delimiter: "@"
 makefiles:
   - ./makefile
   - ./dev/makefiles/ci.mk
+  - ./dev/makefiles/go.mk
+  - ./dev/makefiles/lint.mk
+  - ./dev/makefiles/scan.mk
+  - ./dev/makefiles/build.mk
+  - ./dev/makefiles/generate.mk
+  - ./dev/makefiles/dev.mk
+  - ./dev/makefiles/github.mk
 strict: true
 transport: "http"
 listen: "127.0.0.1:9378"

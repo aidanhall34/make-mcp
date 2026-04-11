@@ -107,7 +107,7 @@ func TestBuildArgs_ParamNotProvided(t *testing.T) {
 		Params: []parser.Param{{Name: "name", Type: parser.ParamTypeString}},
 	}
 	// Provide no values — the param should be silently skipped.
-	args, err := buildArgs(recipe, nil)
+	args, err := buildArgs(recipe, nil, recipe.SourceFile)
 	if err != nil {
 		t.Fatalf("buildArgs() error = %v", err)
 	}
@@ -124,7 +124,7 @@ func TestBuildArgs_StringifyError(t *testing.T) {
 		Params: []parser.Param{{Name: "count", Type: parser.ParamTypeInt}},
 	}
 	// Providing a string for an int param causes a stringify error.
-	if _, err := buildArgs(recipe, map[string]any{"count": "not-a-number"}); err == nil {
+	if _, err := buildArgs(recipe, map[string]any{"count": "not-a-number"}, recipe.SourceFile); err == nil {
 		t.Error("expected error for wrong param type, got nil")
 	}
 }
@@ -135,7 +135,7 @@ func TestBuildArgs_WithSourceFile(t *testing.T) {
 		SourceFile: "/tmp/some/path/Makefile",
 		Params:     []parser.Param{},
 	}
-	args, err := buildArgs(recipe, nil)
+	args, err := buildArgs(recipe, nil, recipe.SourceFile)
 	if err != nil {
 		t.Fatalf("buildArgs() error = %v", err)
 	}
@@ -165,7 +165,7 @@ func TestBuildArgs_BoolAndIntParams(t *testing.T) {
 	args, err := buildArgs(recipe, map[string]any{
 		"verbose": true,
 		"count":   float64(3),
-	})
+	}, recipe.SourceFile)
 	if err != nil {
 		t.Fatalf("buildArgs() error = %v", err)
 	}
@@ -209,7 +209,7 @@ func BenchmarkBuildArgs_NoParams(b *testing.B) {
 	recipe := parser.Recipe{ID: "hello", Params: []parser.Param{}}
 	b.ResetTimer()
 	for b.Loop() {
-		benchArgs, _ = buildArgs(recipe, nil)
+		benchArgs, _ = buildArgs(recipe, nil, recipe.SourceFile)
 	}
 }
 
@@ -234,7 +234,7 @@ func BenchmarkBuildArgs_FiveParams(b *testing.B) {
 	}
 	b.ResetTimer()
 	for b.Loop() {
-		benchArgs, _ = buildArgs(recipe, provided)
+		benchArgs, _ = buildArgs(recipe, provided, recipe.SourceFile)
 	}
 }
 

@@ -12,8 +12,8 @@ always connected and all annotated targets are available as MCP tools.
 | Action | MCP tool to call |
 |---|---|
 | After ALL changes | `lint` |
-| After any code change | `tests` |
-| Full pre-merge check | `lint` `tests` |
+| After any `.go` file change | `tests`, then `build-mcp-server`, then `mcp-server-up` |
+| Full pre-merge check | `lint` then `tests` |
 | Build binaries | `build-mcp-server`, `build-validator` |
 | Build container | `build-container` |
 | Start dev stack | `dev-up` |

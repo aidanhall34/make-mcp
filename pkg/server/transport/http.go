@@ -23,7 +23,7 @@ type HTTPServer struct {
 func NewHTTPServer(toolServer *rootserver.ToolServer, addr string) *HTTPServer {
 	inner := mcpserver.NewStreamableHTTPServer(toolServer.MCP())
 	mux := http.NewServeMux()
-	mux.Handle("/mcp", propagateTraceContext(inner))
+	mux.Handle("/mcp", corsMiddleware(propagateTraceContext(inner)))
 	mux.HandleFunc("/health", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("ok\n"))
@@ -44,6 +44,23 @@ func NewHTTPServer(toolServer *rootserver.ToolServer, addr string) *HTTPServer {
 			Handler: mux,
 		},
 	}
+}
+
+// corsMiddleware adds permissive CORS headers required by browser-based MCP
+// clients (e.g. MCP Inspector). It handles preflight OPTIONS requests and
+// exposes the mcp-session-id response header so JavaScript can read it.
+func corsMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, mcp-session-id, mcp-protocol-version, Last-Event-ID")
+		w.Header().Set("Access-Control-Expose-Headers", "mcp-session-id")
+		if r.Method == http.MethodOptions {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 func propagateTraceContext(next http.Handler) http.Handler {

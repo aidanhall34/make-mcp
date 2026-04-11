@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -212,6 +213,7 @@ func (s *ToolServer) handleToolCall(ctx context.Context, request mcp.CallToolReq
 		Recipe:  recipe,
 		Args:    args,
 		Timeout: s.timeoutFor(recipe.Risk),
+		RootDir: s.rootDir(),
 	}, stdoutWriter, stderrWriter)
 	elapsed := time.Since(start)
 	status := telemetry.StatusSuccess
@@ -241,6 +243,8 @@ func (s *ToolServer) handleToolCall(ctx context.Context, request mcp.CallToolReq
 				"error_code", runnerErr.Code,
 				"timed_out", runnerErr.TimedOut,
 				"elapsed_ms", elapsed.Milliseconds(),
+				"bytes_in", bytesIn,
+				"bytes_out", bytesOut,
 			)
 			if s.cfg.Debug {
 				slog.DebugContext(callCtx, "tool failure output",
@@ -262,10 +266,15 @@ func (s *ToolServer) handleToolCall(ctx context.Context, request mcp.CallToolReq
 		return nil, err
 	}
 
+	slog.InfoContext(callCtx, "tool call complete",
+		"tool.id", recipe.ID,
+		"elapsed_ms", elapsed.Milliseconds(),
+		"bytes_in", bytesIn,
+		"bytes_out", bytesOut,
+	)
 	if s.cfg.Debug {
-		slog.DebugContext(callCtx, "tool call complete",
+		slog.DebugContext(callCtx, "tool call output",
 			"tool.id", recipe.ID,
-			"elapsed_ms", elapsed.Milliseconds(),
 			"stdout", result.Stdout,
 			"stderr", result.Stderr,
 		)
@@ -312,6 +321,16 @@ func resolveHint(hint *bool, defaultValue bool) bool {
 		return *hint
 	}
 	return defaultValue
+}
+
+// rootDir returns the directory of the primary makefile (first in config) so
+// that make invocations run from the project root and pick up all includes.
+// Returns "" (process cwd) when no makefiles are configured.
+func (s *ToolServer) rootDir() string {
+	if len(s.cfg.Makefiles) == 0 {
+		return ""
+	}
+	return filepath.Dir(s.cfg.Makefiles[0])
 }
 
 func (s *ToolServer) timeoutFor(risk parser.RiskLevel) time.Duration {
