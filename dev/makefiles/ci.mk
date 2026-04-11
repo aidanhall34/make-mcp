@@ -209,7 +209,7 @@ test-binary:
 # @ param: IMAGE_TAG string | Tag of the pre-loaded container image (default: git tag or short SHA)
 # @ output: Pass/fail summary for the container smoke test
 # @ output-type: text/plain
-smoke-test-container: build-test-container
+smoke-test-container: build-test-image
 	@mkdir -p "$(_LOG_DIR)"
 	@{ \
 		set -e ; \

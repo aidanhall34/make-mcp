@@ -11,7 +11,7 @@ always connected and all annotated targets are available as MCP tools.
 
 | Action | MCP tool to call |
 |---|---|
-| After any change | `lint` |
+| After ALL changes | `lint` |
 | After any code change | `tests` |
 | Full pre-merge check | `lint` `tests` |
 | Build binaries | `build-mcp-server`, `build-validator` |

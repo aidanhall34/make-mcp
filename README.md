@@ -256,7 +256,7 @@ For more detailed information, see the [GitHub Wiki](https://github.com/aidanhal
 - [Installation](https://github.com/aidanhall34/make-mcp/wiki/Installation)
 - [Testing](https://github.com/aidanhall34/make-mcp/wiki/Testing)
 - [GitHub CI](https://github.com/aidanhall34/make-mcp/wiki/GitHub-CI)
-- [Architecture Proposal](https://github.com/aidanhall34/make-mcp/wiki/Architecture-Proposal)
+- [Architecture](https://github.com/aidanhall34/make-mcp/wiki/Architecture)
 - [Output Types](https://github.com/aidanhall34/make-mcp/wiki/Output-Types)
 - [Metrics](https://github.com/aidanhall34/make-mcp/wiki/Metrics)
 

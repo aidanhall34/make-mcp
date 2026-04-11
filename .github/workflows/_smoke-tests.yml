@@ -72,8 +72,18 @@ jobs:
       - name: Load container image
         run: docker load -i dist/make-mcp_${{ inputs.image-tag }}_linux_${{ inputs.arch }}.tar
 
+      - name: Re-tag image for local use
+        run: |
+          docker tag \
+            "ghcr.io/aidanhall34/make-mcp:${{ inputs.image-tag }}" \
+            "make-mcp-local:${{ inputs.image-tag }}"
+
       - name: Run container smoke test
-        run: make smoke-test-container ARCH=${{ inputs.arch }} IMAGE_TAG="${{ inputs.image-tag }}"
+        run: |
+          make smoke-test-container \
+            ARCH=${{ inputs.arch }} \
+            IMAGE_TAG="${{ inputs.image-tag }}" \
+            IMAGE_NAME=make-mcp-local
 
       - name: Notify Discord
         if: failure()

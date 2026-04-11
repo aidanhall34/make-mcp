@@ -1,5 +1,5 @@
 - [[Home]]
-- [[Architecture Proposal]]
+- [[Architecture]]
 - [[GitHub CI]]
 - [[Installation]]
 - [[Metrics]]

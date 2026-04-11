@@ -1,0 +1,40 @@
+# Metrics Reference
+
+> This file is auto-generated. Run `make gen-metrics-doc` to regenerate.
+
+The MCP server exposes Prometheus metrics when `OTEL_METRICS_EXPORTER=prometheus`
+(the default). The scrape endpoint is `http://127.0.0.1:9090/metrics` by default;
+override with `OTEL_EXPORTER_PROMETHEUS_HOST` and `OTEL_EXPORTER_PROMETHEUS_PORT`.
+
+---
+{{if .Counters}}
+## Counters
+{{range .Counters}}
+### `{{.Name}}`
+
+| Property | Value |
+|---|---|
+| Description | {{.DescriptionOrDash}} |
+| Unit | {{.UnitOrDash}} |
+| Labels | {{.LabelsOrNone}} |
+{{end}}{{end}}{{if .Histograms}}
+## Histograms
+{{range .Histograms}}
+### `{{.Name}}`
+
+| Property | Value |
+|---|---|
+| Description | {{.DescriptionOrDash}} |
+| Unit | {{.UnitOrDash}} |
+| Labels | {{.LabelsOrNone}} |
+{{end}}{{end}}{{if .Gauges}}
+## Gauges
+{{range .Gauges}}
+### `{{.Name}}`
+
+| Property | Value |
+|---|---|
+| Description | {{.DescriptionOrDash}} |
+| Unit | {{.UnitOrDash}} |
+| Labels | {{.LabelsOrNone}} |
+{{end}}{{end}}

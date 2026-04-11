@@ -318,6 +318,20 @@ build: tests build-validator build-mcp-server integration-build-k6 build-contain
 generate-wiki-sidebar:
 	@./scripts/gen-wiki-sidebar.sh
 
+.PHONY: gen-metrics-doc
+# @ name: Generate Metrics Documentation
+# @ description: Parses pkg/telemetry/metrics.go via the Go AST and generates wiki/Metrics.md from docs/metrics.md.tmpl. Fails if the committed file was out of date.
+# @ risk: low
+# @ read-only: false
+# @ destructive: false
+# @ idempotent: true
+# @ open-world: false
+# @ param: none
+# @ output: Updated wiki/Metrics.md or a success message
+# @ output-type: text/plain
+gen-metrics-doc:
+	@go run ./cmd/gen-metrics-doc
+
 .PHONY: pre-commit
 # @ name: Pre-commit
 # @ description: Runs linting, unit tests, and security scans. Installed as a git pre-commit hook by the setup recipe.
@@ -329,7 +343,7 @@ generate-wiki-sidebar:
 # @ param: none
 # @ output: Lint, test, and scan results
 # @ output-type: text/plain
-pre-commit: generate-wiki-sidebar lint unit-tests scan-secrets scan-vulnerabilities
+pre-commit: generate-wiki-sidebar gen-metrics-doc lint unit-tests scan-secrets scan-vulnerabilities
 
 # @ name: Build Validator
 # @ description: Compiles the makefile validator CLI binary to ./bin/make-mcp-validate.
