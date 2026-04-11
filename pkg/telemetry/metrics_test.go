@@ -34,7 +34,7 @@ func TestRecordToolInvocationDurationAddsStatusLabel(t *testing.T) {
 	reader := setupManualMeter(t)
 	recipe := parser.Recipe{ID: "hello-world", Risk: parser.RiskLow}
 
-	RecordToolInvocation(context.Background(), recipe, StatusFailure, 125*time.Millisecond)
+	RecordToolInvocation(context.Background(), recipe, StatusFailure, 125*time.Millisecond, false)
 
 	rm := collectMetrics(t, reader)
 	invocations := findSum[int64](t, rm, "make_mcp_tool_invocations_total")
@@ -54,7 +54,7 @@ func TestRecordedMetricsRemainPresentAcrossCumulativeCollections(t *testing.T) {
 	recipe := parser.Recipe{ID: "hello-world", Risk: parser.RiskLow}
 	labels := map[string]string{"tool": recipe.ID, "risk": string(recipe.Risk), "status": StatusSuccess}
 
-	RecordToolInvocation(context.Background(), recipe, StatusSuccess, 125*time.Millisecond)
+	RecordToolInvocation(context.Background(), recipe, StatusSuccess, 125*time.Millisecond, false)
 
 	_ = collectMetrics(t, reader)
 	second := collectMetrics(t, reader)
@@ -81,7 +81,7 @@ func TestRecordToolInvocationIncludesBooleanHintLabels(t *testing.T) {
 		},
 	}
 
-	RecordToolInvocation(context.Background(), recipe, StatusSuccess, 10*time.Millisecond)
+	RecordToolInvocation(context.Background(), recipe, StatusSuccess, 10*time.Millisecond, false)
 
 	rm := collectMetrics(t, reader)
 	invocations := findSum[int64](t, rm, "make_mcp_tool_invocations_total")
@@ -95,6 +95,7 @@ func TestRecordToolInvocationIncludesBooleanHintLabels(t *testing.T) {
 		"destructive": "false", // default for low-risk
 		"idempotent":  "true",
 		"open_world":  "true", // default
+		"streaming":   "false",
 	}
 	if !hasInt64Point(invocations, labels, 1) {
 		t.Fatalf("invocation counter missing point with boolean hint labels: %#v", invocations.DataPoints)

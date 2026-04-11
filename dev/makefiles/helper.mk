@@ -189,3 +189,9 @@ dev-mcp-inspector: build-mcp-server
 		-e "OTEL_METRIC_EXPORT_INTERVAL=5000" \
 		-- ./bin/make-mcp \
 		--config make-mcp.yml ;
+
+# Connects the MCP inspector to the locally running make-mcp HTTP server.
+# Run 'make mcp-server-up' first to ensure the server is running.
+.PHONY: dev-mcp-inspector-http
+dev-mcp-inspector-http:
+	npx @modelcontextprotocol/inspector http://localhost:9378/mcp ;

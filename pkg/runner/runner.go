@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os/exec"
 	"path/filepath"
 	"strconv"
@@ -58,6 +59,12 @@ func (e *Error) Error() string {
 
 // Run executes make for a single parsed recipe.
 func Run(ctx context.Context, req Request) (Result, error) {
+	return RunStream(ctx, req, nil, nil)
+}
+
+// RunStream executes make for a single parsed recipe, optionally streaming
+// output to the provided writers.
+func RunStream(ctx context.Context, req Request, stdout, stderr io.Writer) (Result, error) {
 	if req.Recipe.ID == "" {
 		return Result{}, &Error{
 			Code:    ErrorCodeInvalidParams,
@@ -87,8 +94,16 @@ func Run(ctx context.Context, req Request) (Result, error) {
 	cmd.Dir = workingDir(req.Recipe.SourceFile)
 
 	var stdoutBuf, stderrBuf bytes.Buffer
-	cmd.Stdout = &stdoutBuf
-	cmd.Stderr = &stderrBuf
+	if stdout != nil {
+		cmd.Stdout = io.MultiWriter(&stdoutBuf, stdout)
+	} else {
+		cmd.Stdout = &stdoutBuf
+	}
+	if stderr != nil {
+		cmd.Stderr = io.MultiWriter(&stderrBuf, stderr)
+	} else {
+		cmd.Stderr = &stderrBuf
+	}
 
 	err = cmd.Run()
 	result := Result{

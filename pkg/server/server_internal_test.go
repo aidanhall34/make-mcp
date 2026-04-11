@@ -475,9 +475,141 @@ func TestGetRecipesByNames_Empty(t *testing.T) {
 	}
 }
 
-// ---- Benchmarks ----
+// ---- progressWriter / streaming ----
 
-var benchTools []interface{}
+// mockClientSession is a minimal ClientSession for testing the streaming path.
+type mockClientSession struct {
+	ch chan mcp.JSONRPCNotification
+}
+
+func newMockSession(buf int) *mockClientSession {
+	return &mockClientSession{ch: make(chan mcp.JSONRPCNotification, buf)}
+}
+
+func (m *mockClientSession) Initialize()                                         {}
+func (m *mockClientSession) Initialized() bool                                   { return true }
+func (m *mockClientSession) NotificationChannel() chan<- mcp.JSONRPCNotification { return m.ch }
+func (m *mockClientSession) SessionID() string                                   { return "test-session" }
+
+// TestProgressWriter_Write verifies that progressWriter delivers a JSON-RPC
+// notification to the session's channel on every Write call.
+func TestProgressWriter_Write(t *testing.T) {
+	session := newMockSession(8)
+	token := mcp.ProgressToken("tok-1")
+	w := &progressWriter{session: session, token: token}
+
+	msg := []byte("hello stream")
+	n, err := w.Write(msg)
+	if err != nil {
+		t.Fatalf("Write() error = %v", err)
+	}
+	if n != len(msg) {
+		t.Errorf("Write() n = %d, want %d", n, len(msg))
+	}
+
+	select {
+	case notif := <-session.ch:
+		if notif.Notification.Method != "notifications/progress" {
+			t.Errorf("method = %q, want notifications/progress", notif.Notification.Method)
+		}
+		fields := notif.Notification.Params.AdditionalFields
+		if fields["progressToken"] != token {
+			t.Errorf("progressToken = %v, want %v", fields["progressToken"], token)
+		}
+		if fields["message"] != string(msg) {
+			t.Errorf("message = %v, want %q", fields["message"], msg)
+		}
+	default:
+		t.Fatal("no notification received in channel after Write()")
+	}
+}
+
+// TestHandleToolCall_WithProgressToken exercises the streaming code path when
+// a progressToken is set but the context carries no session — streaming falls
+// back to non-streaming and the call still succeeds.
+func TestHandleToolCall_WithProgressToken_NoSession(t *testing.T) {
+	ctx := testtel.Start(t)
+	dir := t.TempDir()
+	mfPath := filepath.Join(dir, "Makefile")
+	if err := os.WriteFile(mfPath, []byte("greet:\n\t@printf 'hi\\n'\n"), 0644); err != nil {
+		t.Fatalf("write makefile: %v", err)
+	}
+
+	s, err := New(config.Default(), []parser.Recipe{
+		{
+			ID:          "greet",
+			Name:        "Greet",
+			Description: "Greets.",
+			Risk:        parser.RiskLow,
+			SourceFile:  mfPath,
+			Params:      []parser.Param{},
+			Output:      "greeting",
+			OutputType:  "text/plain",
+		},
+	})
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+
+	var req mcp.CallToolRequest
+	req.Params.Name = "greet"
+	tok := mcp.ProgressToken("test-token")
+	req.Params.Meta = &mcp.Meta{ProgressToken: tok}
+	// No session in context → streaming falls back to false.
+	result, callErr := s.handleToolCall(ctx, req)
+	if callErr != nil {
+		t.Fatalf("handleToolCall() error = %v", callErr)
+	}
+	if result == nil {
+		t.Fatal("expected non-nil result")
+	}
+}
+
+// TestHandleToolCall_WithProgressToken_WithSession exercises the full streaming
+// code path when both a progressToken and a session are present in the context.
+func TestHandleToolCall_WithProgressToken_WithSession(t *testing.T) {
+	ctx := testtel.Start(t)
+	dir := t.TempDir()
+	mfPath := filepath.Join(dir, "Makefile")
+	if err := os.WriteFile(mfPath, []byte("greet:\n\t@printf 'hi\\n'\n"), 0644); err != nil {
+		t.Fatalf("write makefile: %v", err)
+	}
+
+	s, err := New(config.Default(), []parser.Recipe{
+		{
+			ID:          "greet",
+			Name:        "Greet",
+			Description: "Greets.",
+			Risk:        parser.RiskLow,
+			SourceFile:  mfPath,
+			Params:      []parser.Param{},
+			Output:      "greeting",
+			OutputType:  "text/plain",
+		},
+	})
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+
+	// Inject a mock session so the streaming path is taken.
+	session := newMockSession(16)
+	sessionCtx := s.mcp.WithContext(ctx, session)
+
+	var req mcp.CallToolRequest
+	req.Params.Name = "greet"
+	tok := mcp.ProgressToken("stream-token")
+	req.Params.Meta = &mcp.Meta{ProgressToken: tok}
+
+	result, callErr := s.handleToolCall(sessionCtx, req)
+	if callErr != nil {
+		t.Fatalf("handleToolCall() error = %v", callErr)
+	}
+	if result == nil {
+		t.Fatal("expected non-nil result")
+	}
+}
+
+// ---- Benchmarks ----
 
 func BenchmarkBuildServerTools_Small(b *testing.B) {
 	_ = testtel.Start(b)

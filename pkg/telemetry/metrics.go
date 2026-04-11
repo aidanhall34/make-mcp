@@ -125,9 +125,9 @@ func RecordToolReload(ctx context.Context, file, status string) {
 	))
 }
 
-func RecordToolInvocation(ctx context.Context, recipe parser.Recipe, status string, elapsed time.Duration) {
+func RecordToolInvocation(ctx context.Context, recipe parser.Recipe, status string, elapsed time.Duration, streaming bool) {
 	m := Metrics()
-	attrs := metric.WithAttributes(recipeAttrs(recipe, status)...)
+	attrs := metric.WithAttributes(recipeAttrs(recipe, status, streaming)...)
 	m.ToolInvocationsTotal.Add(ctx, 1, attrs)
 	m.ToolInvocationDuration.Record(ctx, elapsed.Seconds(), attrs)
 }
@@ -200,16 +200,16 @@ func RecordToolsListBytes(ctx context.Context, status string, bytesIn, bytesOut 
 
 // RecordToolInvocationBytes records the bytes received and sent for a tool
 // invocation. status must be StatusSuccess or StatusFailure.
-func RecordToolInvocationBytes(ctx context.Context, recipe parser.Recipe, status string, bytesIn, bytesOut int64) {
+func RecordToolInvocationBytes(ctx context.Context, recipe parser.Recipe, status string, bytesIn, bytesOut int64, streaming bool) {
 	m := Metrics()
-	attrs := metric.WithAttributes(recipeAttrs(recipe, status)...)
+	attrs := metric.WithAttributes(recipeAttrs(recipe, status, streaming)...)
 	m.ToolInvocationBytesIn.Record(ctx, bytesIn, attrs)
 	m.ToolInvocationBytesOut.Record(ctx, bytesOut, attrs)
 }
 
 // recipeAttrs returns the standard attribute set for a tool invocation,
 // including risk and all resolved MCP tool hints as boolean labels.
-func recipeAttrs(recipe parser.Recipe, status string) []attribute.KeyValue {
+func recipeAttrs(recipe parser.Recipe, status string, streaming bool) []attribute.KeyValue {
 	return []attribute.KeyValue{
 		attribute.String("tool", recipe.ID),
 		attribute.String("risk", string(recipe.Risk)),
@@ -218,6 +218,7 @@ func recipeAttrs(recipe parser.Recipe, status string) []attribute.KeyValue {
 		attribute.Bool("idempotent", resolveHint(recipe.ToolHints.Idempotent, false)),
 		attribute.Bool("open_world", resolveHint(recipe.ToolHints.OpenWorld, true)),
 		attribute.String("status", status),
+		attribute.Bool("streaming", streaming),
 	}
 }
 

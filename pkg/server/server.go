@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
 	"sync"
 	"time"
@@ -189,12 +190,29 @@ func (s *ToolServer) handleToolCall(ctx context.Context, request mcp.CallToolReq
 		))
 	}
 
+	var progressToken mcp.ProgressToken
+	if request.Params.Meta != nil {
+		progressToken = request.Params.Meta.ProgressToken
+	}
+
+	var stdoutWriter, stderrWriter io.Writer
+	streaming := progressToken != nil
+	if streaming {
+		session := mcpserver.ClientSessionFromContext(callCtx)
+		if session != nil {
+			stdoutWriter = &progressWriter{session: session, token: progressToken}
+			stderrWriter = &progressWriter{session: session, token: progressToken}
+		} else {
+			streaming = false
+		}
+	}
+
 	start := time.Now()
-	result, err := runner.Run(callCtx, runner.Request{
+	result, err := runner.RunStream(callCtx, runner.Request{
 		Recipe:  recipe,
 		Args:    args,
 		Timeout: s.timeoutFor(recipe.Risk),
-	})
+	}, stdoutWriter, stderrWriter)
 	elapsed := time.Since(start)
 	status := telemetry.StatusSuccess
 	bytesOut := int64(0)
@@ -206,7 +224,7 @@ func (s *ToolServer) handleToolCall(ctx context.Context, request mcp.CallToolReq
 	} else {
 		bytesOut = int64(len(result.Stdout) + len(result.Stderr))
 	}
-	s.recordInvocationMetrics(callCtx, recipe, status, elapsed, bytesIn, bytesOut)
+	s.recordInvocationMetrics(callCtx, recipe, status, elapsed, bytesIn, bytesOut, streaming)
 	if err != nil {
 		if runnerErr, ok := err.(*runner.Error); ok {
 			eventAttrs := []attribute.KeyValue{
@@ -261,9 +279,30 @@ func (s *ToolServer) handleToolCall(ctx context.Context, request mcp.CallToolReq
 	}, nil
 }
 
-func (s *ToolServer) recordInvocationMetrics(ctx context.Context, recipe parser.Recipe, status string, elapsed time.Duration, bytesIn, bytesOut int64) {
-	telemetry.RecordToolInvocation(ctx, recipe, status, elapsed)
-	telemetry.RecordToolInvocationBytes(ctx, recipe, status, bytesIn, bytesOut)
+type progressWriter struct {
+	session mcpserver.ClientSession
+	token   mcp.ProgressToken
+}
+
+func (w *progressWriter) Write(p []byte) (n int, err error) {
+	w.session.NotificationChannel() <- mcp.JSONRPCNotification{
+		JSONRPC: "2.0",
+		Notification: mcp.Notification{
+			Method: "notifications/progress",
+			Params: mcp.NotificationParams{
+				AdditionalFields: map[string]any{
+					"progressToken": w.token,
+					"message":       string(p),
+				},
+			},
+		},
+	}
+	return len(p), nil
+}
+
+func (s *ToolServer) recordInvocationMetrics(ctx context.Context, recipe parser.Recipe, status string, elapsed time.Duration, bytesIn, bytesOut int64, streaming bool) {
+	telemetry.RecordToolInvocation(ctx, recipe, status, elapsed, streaming)
+	telemetry.RecordToolInvocationBytes(ctx, recipe, status, bytesIn, bytesOut, streaming)
 }
 
 // resolveHint returns the value of a *bool tool hint, using defaultValue when

@@ -51,8 +51,8 @@ func TestRecordToolsListBytes(t *testing.T) {
 
 func TestRecordToolInvocationBytes(t *testing.T) {
 	recipe := parser.Recipe{ID: "greet", Risk: parser.RiskLow}
-	RecordToolInvocationBytes(context.Background(), recipe, StatusSuccess, 20, 100)
-	RecordToolInvocationBytes(context.Background(), recipe, StatusFailure, 20, 0)
+	RecordToolInvocationBytes(context.Background(), recipe, StatusSuccess, 20, 100, false)
+	RecordToolInvocationBytes(context.Background(), recipe, StatusFailure, 20, 0, false)
 }
 
 func TestTracer(t *testing.T) {

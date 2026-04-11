@@ -42,6 +42,7 @@ always connected and all annotated targets are available as MCP tools.
 # Makefile conventions
 
 - All commands for interacting with the repository are stored in `./makefile`.
+- Integration test recipes (e.g. `hello-world`, `always-fail`, `slow-stream`, `slow-stream-fail`) live in `./testdata/Makefile`. This is the Makefile mounted into the integration test container and used by the k6 integration test suite. Add new integration test tools there, not in `./makefile`.
 - MCP recipe annotations must sit directly above the real recipe target.
 - Do not put `.PHONY` between an MCP annotation block and the recipe target. `.PHONY` may be declared anywhere else in the Makefile.
 - make recipes should be small and composable. Prefer chaining many small recipes rather than writing large recipes.\

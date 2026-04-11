@@ -2,6 +2,7 @@ SHELL=/usr/bin/env bash
 LGTM_VERSION:= 0.23.0
 DEV_DIR=./dev
 _LOG_DIR := $(DEV_DIR)/logs
+_MCP_PID_FILE := $(CURDIR)/dev/run/make-mcp.pid
 TRUFFLEHOG_VERSION=3.94.3
 TRIVY_VERSION=0.69.3
 HADOLINT_VERSION=2.12.0
@@ -526,7 +527,7 @@ dev-volumes:
 
 .PHONY: dev-up
 # @ name: Start development dependencies
-# @ description: Starts the full local development stack, including LGTM and the Grafana MCP sidecar (idempotent)
+# @ description: Starts the full local development stack, including LGTM, the Grafana MCP sidecar, and the make-mcp HTTP server (idempotent)
 # @ risk: low
 # @ read-only: false
 # @ destructive: false
@@ -542,10 +543,11 @@ dev-up: dev-volumes
 		up \
 		-d \
 		--wait ; }
+	$(MAKE) mcp-server-up
 
 .PHONY: dev-down
 # @ name: Stop development dependencies
-# @ description: Stops the full local development stack, including LGTM and the Grafana MCP sidecar
+# @ description: Stops the make-mcp HTTP server and the full local development stack, including LGTM and the Grafana MCP sidecar
 # @ risk: medium
 # @ read-only: false
 # @ destructive: true
@@ -554,7 +556,7 @@ dev-up: dev-volumes
 # @ param: none
 # @ output: The shutdown logs of the running containers in the stack.
 # @ output-type: text/plain
-dev-down: ## Stop and remove the local LGTM development stack
+dev-down: mcp-server-down
 	@{ $(_DEV_COMPOSE_ENV) docker compose \
 		--env-file="$(DEV_DIR)/compose_versions" \
 		$(_DEV_FULL_COMPOSE) \
@@ -573,6 +575,58 @@ dev-down: ## Stop and remove the local LGTM development stack
 # @ output-type: text/plain
 dev-logs:
 	$(_DEV_COMPOSE_ENV) docker compose $(_DEV_FULL_COMPOSE) logs
+
+.PHONY: mcp-server-up
+# @ name: Start make-mcp server
+# @ description: Starts the make-mcp HTTP server as a local background process. Stops any existing instance first so re-running this after a new binary is built picks up the latest version. Requires start-stop-daemon (available on Debian/Ubuntu).
+# @ risk: low
+# @ read-only: false
+# @ destructive: false
+# @ idempotent: true
+# @ open-world: false
+# @ param: none
+# @ output: none
+# @ output-type: text/plain
+mcp-server-up:
+	@mkdir -p "$(CURDIR)/dev/run" "$(_LOG_DIR)"
+	@if [ -f "$(_MCP_PID_FILE)" ]; then \
+		start-stop-daemon --stop --pidfile "$(_MCP_PID_FILE)" \
+			--retry TERM/5/KILL/2 2>/dev/null || true ; \
+		rm -f "$(_MCP_PID_FILE)" ; \
+	fi
+	@env \
+		OTEL_TRACES_EXPORTER="otlp" \
+		OTEL_METRICS_EXPORTER="otlp" \
+		OTEL_EXPORTER_OTLP_ENDPOINT="http://localhost:4317" \
+		OTEL_EXPORTER_OTLP_INSECURE="true" \
+		OTEL_SERVICE_NAME="make-mcp-server" \
+		OTEL_METRIC_EXPORT_INTERVAL="5000" \
+		start-stop-daemon --start --background \
+		--pidfile "$(_MCP_PID_FILE)" --make-pidfile \
+		--chdir "$(CURDIR)" \
+		--exec "$(CURDIR)/bin/make-mcp" \
+		--output "$(CURDIR)/dev/logs/make-mcp-server.log" \
+		-- --config "$(DEV_DIR)/make-mcp.yml"
+
+.PHONY: mcp-server-down
+# @ name: Stop make-mcp server
+# @ description: Stops the locally running make-mcp background process.
+# @ risk: medium
+# @ read-only: false
+# @ destructive: true
+# @ idempotent: true
+# @ open-world: false
+# @ param: none
+# @ output: none
+# @ output-type: text/plain
+mcp-server-down:
+	@{ \
+		if [ -f "$(_MCP_PID_FILE)" ]; then \
+			start-stop-daemon --stop --pidfile "$(_MCP_PID_FILE)" \
+				--retry TERM/5/KILL/2 2>/dev/null || true ; \
+			rm -f "$(_MCP_PID_FILE)" ; \
+		fi ; \
+	}
 
 .PHONY: build-container
 # @ name: Build Container
@@ -656,7 +710,7 @@ integration: build
 # @ param: none
 # @ output: k6 integration test results and pass/fail summary
 # @ output-type: text/plain
-integration-lgtm: integration-build-k6 build-container dev-volumes
+integration-lgtm: integration-build-k6 build-test-container dev-volumes
 	$(call _integration-run-with-lgtm,$(_INTEGRATION_OTEL_COMPOSE))
 
 .PHONY: integration-otel
@@ -670,7 +724,7 @@ integration-lgtm: integration-build-k6 build-container dev-volumes
 # @ param: none
 # @ output: k6 integration test results and pass/fail summary
 # @ output-type: text/plain
-integration-otel: integration-build-k6 build-container
+integration-otel: integration-build-k6 build-test-container
 	$(call _integration-run,$(_INTEGRATION_OTEL_COMPOSE))
 
 # @ name: Upload Branch Protection Rules

@@ -227,6 +227,57 @@ func TestRunMakeNotFound(t *testing.T) {
 	}
 }
 
+func TestRunStreamWritesToWriter(t *testing.T) {
+	ctx := testtel.Start(t)
+	var stdoutBuf, stderrBuf strings.Builder
+	result, err := runner.RunStream(ctx, runner.Request{
+		Recipe: parser.Recipe{
+			SourceFile: makeTempMakefile(t, `
+hello:
+	@printf 'streamed stdout\n'
+	@printf 'streamed stderr\n' 1>&2
+`),
+			ID:     "hello",
+			Params: []parser.Param{},
+		},
+		Timeout: time.Second,
+	}, &stdoutBuf, &stderrBuf)
+	if err != nil {
+		t.Fatalf("RunStream() error = %v", err)
+	}
+	if stdoutBuf.String() != "streamed stdout\n" {
+		t.Errorf("stdout writer = %q, want %q", stdoutBuf.String(), "streamed stdout\n")
+	}
+	if stderrBuf.String() != "streamed stderr\n" {
+		t.Errorf("stderr writer = %q, want %q", stderrBuf.String(), "streamed stderr\n")
+	}
+	// Result buffers must also contain the output.
+	if result.Stdout != "streamed stdout\n" {
+		t.Errorf("result.Stdout = %q, want %q", result.Stdout, "streamed stdout\n")
+	}
+	if result.Stderr != "streamed stderr\n" {
+		t.Errorf("result.Stderr = %q, want %q", result.Stderr, "streamed stderr\n")
+	}
+}
+
+func TestRunStreamNilWritersEquivalentToRun(t *testing.T) {
+	ctx := testtel.Start(t)
+	result, err := runner.RunStream(ctx, runner.Request{
+		Recipe: parser.Recipe{
+			SourceFile: makeTempMakefile(t, "hello:\n\t@printf 'hi\\n'\n"),
+			ID:         "hello",
+			Params:     []parser.Param{},
+		},
+		Timeout: time.Second,
+	}, nil, nil)
+	if err != nil {
+		t.Fatalf("RunStream(nil, nil) error = %v", err)
+	}
+	if result.Stdout != "hi\n" {
+		t.Errorf("stdout = %q, want %q", result.Stdout, "hi\n")
+	}
+}
+
 func makeTempMakefile(t *testing.T, contents string) string {
 	t.Helper()
 	dir := t.TempDir()

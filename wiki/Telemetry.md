@@ -40,7 +40,7 @@ override with `OTEL_EXPORTER_PROMETHEUS_HOST` and `OTEL_EXPORTER_PROMETHEUS_PORT
 |---|---|
 | Description | — |
 | Unit | — |
-| Labels | `destructive`, `idempotent`, `open_world`, `read_only`, `risk`, `status`, `tool` |
+| Labels | `destructive`, `idempotent`, `open_world`, `read_only`, `risk`, `status`, `streaming`, `tool` |
 
 ## Histograms
 
@@ -74,7 +74,7 @@ override with `OTEL_EXPORTER_PROMETHEUS_HOST` and `OTEL_EXPORTER_PROMETHEUS_PORT
 |---|---|
 | Description | — |
 | Unit | — |
-| Labels | `destructive`, `idempotent`, `open_world`, `read_only`, `risk`, `status`, `tool` |
+| Labels | `destructive`, `idempotent`, `open_world`, `read_only`, `risk`, `status`, `streaming`, `tool` |
 
 ### `make_mcp_tool_invocation_bytes_in`
 
@@ -82,7 +82,7 @@ override with `OTEL_EXPORTER_PROMETHEUS_HOST` and `OTEL_EXPORTER_PROMETHEUS_PORT
 |---|---|
 | Description | Bytes received in tool invocation requests (JSON-encoded arguments). |
 | Unit | By |
-| Labels | `destructive`, `idempotent`, `open_world`, `read_only`, `risk`, `status`, `tool` |
+| Labels | `destructive`, `idempotent`, `open_world`, `read_only`, `risk`, `status`, `streaming`, `tool` |
 
 ### `make_mcp_tool_invocation_bytes_out`
 
@@ -90,7 +90,7 @@ override with `OTEL_EXPORTER_PROMETHEUS_HOST` and `OTEL_EXPORTER_PROMETHEUS_PORT
 |---|---|
 | Description | Bytes sent in tool invocation responses (stdout + stderr). |
 | Unit | By |
-| Labels | `destructive`, `idempotent`, `open_world`, `read_only`, `risk`, `status`, `tool` |
+| Labels | `destructive`, `idempotent`, `open_world`, `read_only`, `risk`, `status`, `streaming`, `tool` |
 
 ## Gauges
 
