@@ -151,7 +151,7 @@ jobs:
           gh release upload "${GIT_TAG}" sbom-*.json --clobber
 
       - name: Notify Discord
-        if: always()
+        if: failure()
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
           GH_TOKEN: ${{ github.token }}
@@ -206,7 +206,7 @@ jobs:
             --clobber
 
       - name: Notify Discord
-        if: always()
+        if: failure()
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
           GH_TOKEN: ${{ github.token }}
@@ -279,7 +279,7 @@ jobs:
             "${image}:${GIT_TAG}-arm64"
 
       - name: Notify Discord
-        if: always()
+        if: failure()
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
           GH_TOKEN: ${{ github.token }}
@@ -315,7 +315,7 @@ jobs:
           make smoke-test-container ARCH=${{ matrix.arch }} IMAGE_TAG="${GIT_TAG}"
 
       - name: Notify Discord
-        if: always()
+        if: failure()
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
           GH_TOKEN: ${{ github.token }}
@@ -359,11 +359,32 @@ jobs:
           make test-binary ARCH=${{ matrix.arch }}
 
       - name: Notify Discord
-        if: always()
+        if: failure()
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
           GH_TOKEN: ${{ github.token }}
           JOB_NAME: "install-test-releases (${{ matrix.arch }})"
           JOB_STATUS: ${{ job.status }}
+          STARTED_AT: ${{ steps.started.outputs.at }}
+        run: ./.github/scripts/notify-discord.sh
+
+  notify-release-success:
+    needs: [semantic-release, pull-test-containers, install-test-releases]
+    if: success() && needs.semantic-release.outputs.released == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Record start time
+        id: started
+        run: echo "at=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
+
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Notify Discord
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          GH_TOKEN: ${{ github.token }}
+          JOB_NAME: "Release Published (${{ needs.semantic-release.outputs.git_tag }})"
+          JOB_STATUS: "success"
           STARTED_AT: ${{ steps.started.outputs.at }}
         run: ./.github/scripts/notify-discord.sh
