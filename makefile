@@ -2,7 +2,8 @@ SHELL=/usr/bin/env bash
 LGTM_VERSION:= 0.23.0
 DEV_DIR=./dev
 _LOG_DIR := $(DEV_DIR)/logs
-_MCP_PID_FILE := $(CURDIR)/dev/run/make-mcp.pid
+_MCP_PID_FILE        := $(CURDIR)/dev/run/make-mcp.pid
+_LGTM_LOGS_PID_FILE  := $(CURDIR)/dev/run/lgtm-logs.pid
 TRUFFLEHOG_VERSION=3.94.3
 TRIVY_VERSION=0.69.3
 HADOLINT_VERSION=2.12.0
@@ -543,6 +544,17 @@ dev-up: dev-volumes
 		up \
 		-d \
 		--wait ; }
+	@mkdir -p "$(CURDIR)/dev/run"
+	@touch "$(_LOG_DIR)/lgtm.log"
+	@chmod 664 "$(_LOG_DIR)/lgtm.log"
+	@if [ -f "$(_LGTM_LOGS_PID_FILE)" ]; then \
+		kill $$(cat "$(_LGTM_LOGS_PID_FILE)") 2>/dev/null || true ; \
+		rm -f "$(_LGTM_LOGS_PID_FILE)" ; \
+	fi
+	@$(_DEV_COMPOSE_ENV) docker compose \
+		$(_DEV_FULL_COMPOSE) \
+		--env-file="$(DEV_DIR)/compose_versions" \
+		logs -f --no-color >> "$(_LOG_DIR)/lgtm.log" 2>&1 & echo $$! > "$(_LGTM_LOGS_PID_FILE)"
 	$(MAKE) mcp-server-up
 
 .PHONY: dev-down
@@ -557,6 +569,10 @@ dev-up: dev-volumes
 # @ output: The shutdown logs of the running containers in the stack.
 # @ output-type: text/plain
 dev-down: mcp-server-down
+	@if [ -f "$(_LGTM_LOGS_PID_FILE)" ]; then \
+		kill $$(cat "$(_LGTM_LOGS_PID_FILE)") 2>/dev/null || true ; \
+		rm -f "$(_LGTM_LOGS_PID_FILE)" ; \
+	fi
 	@{ $(_DEV_COMPOSE_ENV) docker compose \
 		--env-file="$(DEV_DIR)/compose_versions" \
 		$(_DEV_FULL_COMPOSE) \
@@ -574,7 +590,7 @@ dev-down: mcp-server-down
 # @ output: Docker container logs
 # @ output-type: text/plain
 dev-logs:
-	$(_DEV_COMPOSE_ENV) docker compose $(_DEV_FULL_COMPOSE) logs
+	$(_DEV_COMPOSE_ENV) docker compose $(_DEV_FULL_COMPOSE) logs --since 5m
 
 .PHONY: mcp-server-up
 # @ name: Start make-mcp server
@@ -589,6 +605,8 @@ dev-logs:
 # @ output-type: text/plain
 mcp-server-up:
 	@mkdir -p "$(CURDIR)/dev/run" "$(_LOG_DIR)"
+	@touch "$(_LOG_DIR)/make-mcp-server.log"
+	@chmod 664 "$(_LOG_DIR)/make-mcp-server.log"
 	@if [ -f "$(_MCP_PID_FILE)" ]; then \
 		start-stop-daemon --stop --pidfile "$(_MCP_PID_FILE)" \
 			--retry TERM/5/KILL/2 2>/dev/null || true ; \

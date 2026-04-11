@@ -12,6 +12,14 @@
 #     which the filelog/make receiver then ingests (*.log glob covers it automatically)
 #   • service.telemetry.metrics.level: detailed — full otelcol self-metrics at :8888
 
+# Loki default limits (limits_config) that govern what this collector may push:
+#   max_label_names_per_series: 15
+#   max_label_name_length:      1024
+#   max_label_value_length:     2048
+# The transform processor below enforces the value-length and count limits before
+# the push so that oversized attributes are truncated rather than causing the
+# whole batch to be rejected with a 400.
+
 # ── Receivers ─────────────────────────────────────────────────────────────────
 
 receivers:
@@ -42,16 +50,30 @@ receivers:
 processors:
   transform:
     log_statements:
-      - set(resource.attributes["service.name"], log.attributes["log.file.name"]) where resource.attributes["service.name"] == nil
+      - context: log
+        statements:
+          # Populate service.name from the log file name when not already set.
+          - set(resource.attributes["service.name"], attributes["log.file.name"]) where resource.attributes["service.name"] == nil
+          # Truncate log-record attribute values that exceed Loki's max_label_value_length (2048).
+          # Long values (e.g. full log lines captured as attributes) cause the whole batch to be
+          # rejected with a 400; truncate instead of dropping so the key is preserved.
+          - truncate_all(attributes, 2048)
+          # Cap log-record attributes at Loki's max_label_names_per_series (15), keeping the file name.
+          - limit(attributes, 15, ["log.file.name"])
+          # Apply the same guards to resource attributes forwarded as structured metadata.
+          - truncate_all(resource.attributes, 2048)
+          - limit(resource.attributes, 15, ["service.name"])
   batch:
     timeout: 5s
 
 # ── Exporters ─────────────────────────────────────────────────────────────────
 
 exporters:
-  # Loki runs at localhost inside the grafana/otel-lgtm container.
-  otlphttp/loki:
-    endpoint: http://localhost:3100/otlp
+  # Loki runs at 127.0.0.1 inside the grafana/otel-lgtm container.
+  # Use the explicit IPv4 address — Go resolves "localhost" to [::1] when
+  # IPv6 is present, but Loki only binds on 127.0.0.1.
+  otlp_http/loki:
+    endpoint: http://127.0.0.1:3100/otlp
     tls:
       insecure: true
     compression: gzip
@@ -65,8 +87,8 @@ exporters:
       enabled: true
     metric_expiration: 2m
 
-  otlphttp/tempo:
-    endpoint: http://localhost:4418
+  otlp_http/tempo:
+    endpoint: http://127.0.0.1:4418
     tls:
       insecure: true
     compression: gzip
@@ -109,11 +131,11 @@ service:
     logs/make:
       receivers: [filelog/logfiles, otlp]
       processors: [transform, batch]
-      exporters: [otlphttp/loki]
+      exporters: [otlp_http/loki]
     traces/spans:
       receivers: [otlp]
       processors: [batch]
-      exporters: [otlphttp/tempo]
+      exporters: [otlp_http/tempo]
     metrics/spanmetrics:
       receivers: [otlp]
       processors: [batch]
