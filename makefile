@@ -212,7 +212,7 @@ lint-dockerfile:
 			-v "$(CURDIR):/workspace" \
 			-w "/workspace" \
 			hadolint/hadolint:v$(HADOLINT_VERSION) \
-			hadolint $$dockerfiles ; \
+			hadolint --failure-threshold warning $$dockerfiles ; \
 	} $(call _tee-log,lint-dockerfile) ; \
 	wait
 

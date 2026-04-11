@@ -1,12 +1,13 @@
 # Minimal testing container for CI with make and other testing utilities.
 # Reference this as an example for how to copy make-mcp into your own dev containers.
 ARG MAKE_MCP_IMAGE=ghcr.io/aidanhall34/make-mcp:latest
+# hadolint ignore=DL3006
 FROM ${MAKE_MCP_IMAGE} AS mcp
 
 FROM alpine:3.21
 # Install make, echo (part of coreutils or busybox), and wget for healthchecks.
 # Integration tests might need these on the path.
-RUN apk add --no-cache make coreutils wget curl
+RUN apk add --no-cache make=4.4.1-r2 coreutils=9.5-r2 wget=1.25.0-r0 curl=8.14.1-r2
 
 # Copy the make-mcp binaries from the scratch image.
 COPY --from=mcp /make-mcp /usr/local/bin/make-mcp

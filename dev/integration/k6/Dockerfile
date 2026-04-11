@@ -1,6 +1,6 @@
 # Builds a custom k6 binary with the xk6-mcp extension bundled in.
 # The resulting image is used by docker-compose.integration.yml.
-FROM grafana/xk6 AS builder
+FROM grafana/xk6:v1.3.7 AS builder
 # GONOSUMDB bypasses the checksum database for pre-release modules.
 # GOFLAGS ensures the go.sum is updated automatically (required in a fresh module).
 ENV GONOSUMDB=*
