@@ -978,6 +978,7 @@ test-binary:
 		curl -sf "http://localhost:9378/ready" ; \
 		printf '\nbinary smoke tests passed (%s)\n' "$(ARCH)" ; \
 	} $(call _tee-log,test-binary-$(ARCH)) ; \
+	kill "$$server_pid" 2>/dev/null || true ; \
 	wait
 
 .PHONY: smoke-test-container
