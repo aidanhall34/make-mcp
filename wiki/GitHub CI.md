@@ -47,16 +47,18 @@ push
 ### build-images (_build-image.yml)
 
 Builds the container image tar via `make build-container-tar`. Immediately after building,
-it runs a **Trivy vulnerability scan** on the tarball. If any `HIGH` or `CRITICAL` 
+it runs a **Trivy vulnerability scan** on the tarball. If any `HIGH` or `CRITICAL`
 vulnerabilities are found, the job fails.
 
 ### smoke-tests (_smoke-tests.yml)
 
 **Binary smoke test:**
+
 1. Download `binaries-<arch>` artifact.
 2. Run `make test-binary ARCH=<arch>` (HTTP mode, `/ready` poll).
 
 **Container smoke test:**
+
 1. Download `container-<arch>` artifact and `docker load` it.
 2. Run `make smoke-test-container ARCH=<arch>` (HTTP mode, `/ready` poll).
 
@@ -64,7 +66,7 @@ vulnerabilities are found, the job fails.
 
 Runs the k6 MCP protocol test suite against both the binary and the container.
 
-**Binary:** starts `mcp-server` on the host, runs k6 via Docker targeting 
+**Binary:** starts `mcp-server` on the host, runs k6 via Docker targeting
 `host.docker.internal:9378` using `make integration-binary`.
 
 **Container:** loads the pre-built tar, runs `make integration-prebuilt`.
@@ -79,6 +81,7 @@ only verified code is published.
 ### semantic-release
 
 Runs `npx semantic-release`. If a new version is determined:
+
 1. Creates a git tag (e.g., `v1.2.3`).
 2. Generates a GitHub Release with a changelog.
 3. Outputs `released=true` to trigger downstream jobs.
@@ -86,6 +89,7 @@ Runs `npx semantic-release`. If a new version is determined:
 ### sbom-and-scan
 
 After release builds complete, this job:
+
 1. **Generates SBOMs** in CycloneDX format for both binaries and containers.
 2. **Performs a final Trivy scan** on the release artifacts.
 3. **Uploads SBOMs** directly to the GitHub Release.
@@ -95,8 +99,9 @@ After release builds complete, this job:
 ## Discord notifications
 
 Notifications are optimized to reduce noise:
+
 - **CI Jobs:** Only send a Discord notification on **failure**.
-- **Release Jobs:** Only send on **failure**, except for `semantic-release`, which 
+- **Release Jobs:** Only send on **failure**, except for `semantic-release`, which
   notifies on failure OR when a new version is successfully published.
 
 Embeds include job name, status, duration, and a link to the commit/PR.

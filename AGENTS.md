@@ -3,21 +3,37 @@
 These instructions are stored in the repository root so coding agents can use
 the same project context without relying on global machine configuration.
 
+# CRITICAL: always use the MCP server — never Bash for make
+
+**Never run `make`, `go run ./cmd/validate`, or any makefile target via the Bash tool.**
+Use the `make-mcp` MCP server for every makefile interaction. The server is
+always connected and all annotated targets are available as MCP tools.
+
+| Action | MCP tool to call |
+|---|---|
+| After any code change | `unit-tests` then `lint` |
+| After any makefile change | `validate` then `lint` |
+| After any markdown change | `lint-markdown` |
+| Full pre-merge check | `tests`, `lint`, `validate` |
+| Build binaries | `build-mcp-server`, `build-validator` |
+| Build container | `build-container` |
+| Start dev stack | `dev-up` |
+| Stop dev stack | `dev-down` |
+
 # Project summary
 
 - make-mcp is a Go MCP server that exposes explicitly annotated Makefile
   recipes as MCP tools.
 - Unannotated Makefile targets are ignored.
-- the make targets to `test` and `build` must be run at the completion of every task. They must be invoked via the MCP make-mcp server.
 - The server can run over stdio or HTTP, as configured in `./make-mcp.yml`.
 
-# Common commands
+# Common commands (MCP tools only)
 
-- Use `make tests` to run the full Go unit-test suite.
-- Use `make validate` to validate annotated recipes in the configured Makefile.
-- Use `make build` to build project binaries into `./bin`.
-- Use `make dev-up` to start the local LGTM/Grafana development backend.
-- Use `make dev-down` to stop the local development backend.
+- `unit-tests` — run the full Go unit-test suite.
+- `validate` — validate annotated recipes in the configured Makefile.
+- `build` — build all project binaries and containers.
+- `dev-up` — start the local LGTM/Grafana development backend.
+- `dev-down` — stop the local development backend.
 
 # Docs conventions
 
@@ -27,11 +43,8 @@ the same project context without relying on global machine configuration.
 # Makefile conventions
 
 - All commands for interacting with the repository are stored in `./makefile`.
-- Public makefile recipes are accessable through the `make-mcp` mcp server.\
-  Always use this MCP server to interact with make.
 - MCP recipe annotations must sit directly above the real recipe target.
-- Do not put `.PHONY` between an MCP annotation block and the recipe target.
-- `.PHONY` may be declared anywhere else in the Makefile.
+- Do not put `.PHONY` between an MCP annotation block and the recipe target. `.PHONY` may be declared anywhere else in the Makefile.
 - make recipes should be small and composable. Prefer chaining many small recipes rather than writing large recipes.\
   e.g.
 
@@ -41,13 +54,11 @@ the same project context without relying on global machine configuration.
   ```
 
 - All variables must be wrapped in double quotes (")
-- Use the `Lint` make-mcp server tool to validate changes made to the makefile upon every change.
 
 # Coding conventions
 
 - Code should be written in Go.
 - Code should always include unit tests.
-- Use the `Test` make-mcp server tool to validate changes made to code upon every change.
 - Code should be written in TDD style.
 - Preserve the stdlib-only parser unless a dependency is clearly justified.
 - Every package has a `testmain_test.go` with a `TestMain` that calls

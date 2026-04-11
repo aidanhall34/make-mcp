@@ -599,6 +599,33 @@ integration-lgtm: integration-build-k6 build-container dev-volumes
 integration-otel: integration-build-k6 build-container
 	$(call _integration-run,$(_INTEGRATION_OTEL_COMPOSE))
 
+# @ name: Upload Branch Protection Rules
+# @ description: Applies branch protection rules to GitHub for each JSON file in .github/branch-protection/. Each file must be named after the branch it protects (e.g. main.json). Reads the current repo from the gh CLI.
+# @ risk: high
+# @ read-only: false
+# @ destructive: false
+# @ idempotent: true
+# @ open-world: true
+# @ param: none
+# @ output: Confirmation that branch protection was applied for each branch
+# @ output-type: text/plain
+.PHONY: upload-branch-protection
+upload-branch-protection:
+	@{ \
+		set -e ; \
+		repo="$$(gh repo view --json nameWithOwner -q .nameWithOwner)" ; \
+		for f in .github/branch-protection/*.json; do \
+			branch="$$(basename "$$f" .json)" ; \
+			printf 'applying branch protection for %s/%s...\n' "$$repo" "$$branch" ; \
+			gh api \
+				--method PUT \
+				-H "Accept: application/vnd.github+json" \
+				"/repos/$$repo/branches/$$branch/protection" \
+				--input "$$f" ; \
+			printf 'branch protection applied for %s\n' "$$branch" ; \
+		done ; \
+	}
+
 # @ name: Upload Discord Webhook Secret
 # @ description: Stores a Discord webhook URL as the DISCORD_WEBHOOK_URL GitHub Actions secret using the gh CLI, and also writes it to the local ACT_SECRET_FILE (.act.secrets) so act can read it when running workflows locally.
 # @ risk: high

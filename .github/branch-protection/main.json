@@ -2,10 +2,24 @@
   "required_status_checks": {
     "strict": true,
     "contexts": [
-      "lint",
-      "unit-tests",
-      "integration (tools-list)",
-      "integration (tools-call-hello-world)"
+      "lint / lint",
+      "scan / scan (TruffleHog)",
+      "scan / scan (Trivy)",
+      "test / test",
+      "bench / bench",
+      "build-images-amd64 / build-images (amd64)",
+      "build-images-arm64 / build-images (arm64)",
+      "build-releases-amd64 / build-releases (amd64)",
+      "build-releases-arm64 / build-releases (arm64)",
+      "smoke-tests-amd64 / smoke-tests (binary-amd64)",
+      "smoke-tests-amd64 / smoke-tests (container-amd64)",
+      "smoke-tests-arm64 / smoke-tests (binary-arm64)",
+      "smoke-tests-arm64 / smoke-tests (container-arm64)",
+      "install-tests / install-tests",
+      "compatibility-tests-amd64 / compatibility-tests (binary-amd64)",
+      "compatibility-tests-amd64 / compatibility-tests (container-amd64)",
+      "compatibility-tests-arm64 / compatibility-tests (binary-arm64)",
+      "compatibility-tests-arm64 / compatibility-tests (container-arm64)"
     ]
   },
   "enforce_admins": true,
