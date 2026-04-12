@@ -129,13 +129,13 @@ jobs:
           set -euo pipefail
           mkdir -p dist/
           image_name="ghcr.io/${{ github.repository_owner }}/make-mcp"
-          
+
           for arch in amd64 arm64; do
             # Release archive SBOM
             cp artifacts/binaries-${arch}/* dist/
             trivy fs --format cyclonedx --output "sbom-release-${arch}.cdx.json" dist/
             trivy fs --exit-code 1 --severity HIGH,CRITICAL dist/
-            
+
             # Container SBOM
             tar_file="artifacts/container-${arch}/make-mcp_${GIT_TAG}_linux_${arch}.tar"
             docker load -i "${tar_file}"
@@ -160,8 +160,48 @@ jobs:
           STARTED_AT: ${{ steps.started.outputs.at }}
         run: ./.github/scripts/notify-discord.sh
 
+  smoke-tests-amd64:
+    needs: [semantic-release, build-image-amd64, build-release-amd64]
+    if: needs.semantic-release.outputs.released == 'true'
+    uses: ./.github/workflows/_smoke-tests.yml
+    with:
+      arch: amd64
+      image-tag: ${{ needs.semantic-release.outputs.git_tag }}
+    secrets:
+      DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+
+  smoke-tests-arm64:
+    needs: [semantic-release, build-image-arm64, build-release-arm64]
+    if: needs.semantic-release.outputs.released == 'true'
+    uses: ./.github/workflows/_smoke-tests.yml
+    with:
+      arch: arm64
+      image-tag: ${{ needs.semantic-release.outputs.git_tag }}
+    secrets:
+      DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+
+  compatibility-tests-amd64:
+    needs: [semantic-release, build-image-amd64, build-release-amd64]
+    if: needs.semantic-release.outputs.released == 'true'
+    uses: ./.github/workflows/_compatibility-tests.yml
+    with:
+      arch: amd64
+      image-tag: ${{ needs.semantic-release.outputs.git_tag }}
+    secrets:
+      DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+
+  compatibility-tests-arm64:
+    needs: [semantic-release, build-image-arm64, build-release-arm64]
+    if: needs.semantic-release.outputs.released == 'true'
+    uses: ./.github/workflows/_compatibility-tests.yml
+    with:
+      arch: arm64
+      image-tag: ${{ needs.semantic-release.outputs.git_tag }}
+    secrets:
+      DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+
   release-binaries:
-    needs: sbom-and-scan
+    needs: [sbom-and-scan, smoke-tests-amd64, smoke-tests-arm64, compatibility-tests-amd64, compatibility-tests-arm64]
     name: release-binaries
     runs-on: ubuntu-latest
     permissions:
@@ -191,7 +231,7 @@ jobs:
           make package-release-archive \
             VERSION="${GIT_TAG}" \
             ARCH=${{ matrix.arch }}
-          
+
           cd dist/
           sha256sum "make-mcp_${GIT_TAG}_linux_${{ matrix.arch }}.tar.gz" > "make-mcp_${GIT_TAG}_linux_${{ matrix.arch }}.sha256"
 
@@ -216,7 +256,7 @@ jobs:
         run: ./.github/scripts/notify-discord.sh
 
   release-containers:
-    needs: sbom-and-scan
+    needs: [sbom-and-scan, smoke-tests-amd64, smoke-tests-arm64, compatibility-tests-amd64, compatibility-tests-arm64]
     name: release-containers
     runs-on: ubuntu-latest
     permissions:

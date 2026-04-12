@@ -1,12 +1,25 @@
 # make-mcp
 
 An MCP (Model Context Protocol) server that exposes Makefile recipes as tools.
+Teach your large language model to use your repo through Makefile annotations.
 
-## Project goal
+Teach your LLM how to understand common processes defined in makefiles, and provide a gateway for contained code execution.
 
-`make-mcp` starts as a Docker container or background binary. It listens for MCP
-requests over stdio or streamable HTTP and serves information about the recipes
-defined in one or more Makefiles.
+![Claude acting on a natural language prompt to lint and build the repo](./images/claude_prompt.png)
+
+---
+
+**Connect to `make-mcp` over streamable HTTP or stdio.** Drop the connection config into your MCP client and you're ready to go:
+
+![Claudes MCP configuration](./images/mcp_config.png)
+
+---
+
+**Adding more tools is as simple as annotating more recipes.** Large language models can write and share recipes with any MCP-compatible client. The server pushes an updated tool list to the client whenever a Makefile changes:
+
+![Claudes list of tools](./images/claude_tools.png)
+
+## How it works
 
 Each annotated recipe is exposed as a distinct MCP tool. The server:
 
@@ -17,11 +30,11 @@ Each annotated recipe is exposed as a distinct MCP tool. The server:
 
 ## Annotation schema
 
-See [[Schema]] for the full annotation reference, including field definitions, param format, output types, and optional MCP tool hints.
+See the [[Schema]] page in the wiki for the full annotation reference, including field definitions, param format, output types, and optional MCP tool hints.
 
 ## Configuration
 
-See [[Configuration]] for `make-mcp.yml` options, CLI flags, and OpenTelemetry environment variables.
+See the [[Configuration]] page in the wiki for `make-mcp.yml` options, CLI flags, and OpenTelemetry environment variables.
 
 ## Execution and error semantics
 
@@ -39,12 +52,12 @@ the server returns an MCP error instead of a successful tool result.
 
 ## Installation
 
-See [[Installation]] for instructions to install from GitHub
+See the [[Installation]] page for instructions to install from GitHub
 Releases, Docker, `go install`, or build from source.
 
 ## Documentation
 
-For more detailed information, see:
+For more detailed information, see the wiki:
 
 - [[Installation]]
 - [[Schema]]
@@ -52,7 +65,7 @@ For more detailed information, see:
 - [[Testing]]
 - [[GitHub CI]]
 - [[Architecture]]
-- [[Metrics]]
+- [[Telemetry]]
 
 ## Development
 

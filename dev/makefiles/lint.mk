@@ -78,6 +78,23 @@ lint-dockerfile:
 	} $(call _tee-log,lint-dockerfile) ; \
 	wait
 
+.PHONY: lint-yaml
+# @ name: Lint YAML
+# @ description: Lints all YAML files in the repository with yamllint using the rules defined in .yamllint.yml.
+# @ risk: low
+# @ read-only: true
+# @ destructive: false
+# @ idempotent: true
+# @ open-world: false
+# @ param: none
+# @ output: yamllint results and any rule violations
+# @ output-type: text/plain
+lint-yaml:
+	@mkdir -p "$(_LOG_DIR)"
+	@{ "$(VENV)/bin/yamllint" -c .yamllint.yml . ; } \
+		$(call _tee-log,lint-yaml) ; \
+	wait
+
 .PHONY: lint-makefile
 # @ name: Lint Makefile
 # @ description: Lints all Makefiles in the repository with checkmake running in a Docker container. Fails if any rule violations are found.

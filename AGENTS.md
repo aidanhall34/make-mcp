@@ -98,6 +98,11 @@ always connected and all annotated targets are available as MCP tools.
   is running.
 - The repo-local MCP client configuration is `./.mcp.json`.
 
+# Python conventions
+
+- Install Python packages with `uv add <package>` — never `uv pip install`.
+- `uv add` manages `pyproject.toml` and `uv.lock`; use `uv sync` to install from the lockfile.
+
 # Docker conventions
 
 - All image tags must be set with environment variables.

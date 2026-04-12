@@ -10,6 +10,7 @@ push trigger of their own — they are invoked via `workflow_call`.
 |---|---|---|
 | `ci.yml` | push | **Orchestrator:** Runs the full pre-merge suite (lint, scan, test, build, smoke, integration) |
 | `release.yml` | push to `main` | **Orchestrator:** Full release lifecycle — semantic-release, publish, SBOM, verify |
+| `wiki.yml` | push to `main` (`wiki/**`) | Syncs `wiki/` to the GitHub wiki git repository |
 | `_lint.yml` | workflow_call | Go formatting, vet, markdownlint, mod tidy |
 | `_scan.yml` | workflow_call | TruffleHog secret scan + Trivy vulnerability scan on source |
 | `_test.yml` | workflow_call | Unit tests with `-race` on amd64 |
@@ -105,6 +106,42 @@ Notifications are optimized to reduce noise:
   notifies on failure OR when a new version is successfully published.
 
 Embeds include job name, status, duration, and a link to the commit/PR.
+
+---
+
+## Branch protection (Repository Ruleset)
+
+`main` is protected by a GitHub Repository Ruleset stored in `.github/rulesets/main.json`.
+Apply or update it with:
+
+```sh
+make upload-ruleset
+```
+
+The ruleset enforces:
+
+| Rule | Value |
+|---|---|
+| Deletion | Blocked |
+| Force push | Blocked |
+| Required linear history | Yes |
+| Required approving reviews | 1 |
+| Dismiss stale reviews on push | Yes |
+| Require last-push approval | Yes |
+| Required conversation resolution | Yes |
+| Required status checks (strict) | All 18 CI jobs |
+
+**Bypass:** the repository `Admin` role bypasses all rules unconditionally. On this repo that is `aidanhall34` only. All other users and apps (including `github-actions`) are subject to the full ruleset.
+
+> **Note:** The rulesets API does not support per-workflow bypass. The `github-actions` app is intentionally excluded from the bypass list — automated pushes (e.g. semantic-release CHANGELOG commits) must go through a PR or use a fine-grained PAT with `contents: write` scope stored as a repository secret.
+
+---
+
+## Wiki publishing
+
+Wiki source lives in `wiki/` inside the main repository. On every push to `main` that touches `wiki/**`, the `wiki.yml` workflow clones the GitHub wiki git repository and syncs the Markdown files.
+
+> **First-time setup:** GitHub does not create the wiki git repository until at least one page exists. Before the workflow can push, navigate to the repository's **Wiki** tab and create a placeholder page, then the workflow will take over on the next push.
 
 ---
 

@@ -33,6 +33,14 @@ jobs:
       - name: Install Node dependencies
         run: npm ci
 
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.13"
+
+      - name: Install Python dependencies
+        run: uv sync
+
       - name: Run lint and validation
         run: make lint
 

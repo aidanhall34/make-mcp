@@ -14,6 +14,20 @@ SHELL=/usr/bin/env bash
 generate-wiki-sidebar:
 	@./scripts/gen-wiki-sidebar.sh
 
+.PHONY: generate-wiki-home
+# @ name: Generate Wiki Home
+# @ description: Generates wiki/Home.md from README.md by rewriting image paths and converting GitHub wiki URLs to wiki-link syntax. Fails if the home page was outdated.
+# @ risk: low
+# @ read-only: false
+# @ destructive: false
+# @ idempotent: true
+# @ open-world: false
+# @ param: none
+# @ output: Updated wiki/Home.md or a success message
+# @ output-type: text/plain
+generate-wiki-home:
+	@./scripts/gen-wiki-home.sh
+
 .PHONY: gen-metrics-doc
 # @ name: Generate Metrics Documentation
 # @ description: Parses pkg/telemetry/metrics.go via the Go AST and generates wiki/Metrics.md from docs/metrics.md.tmpl. Fails if the committed file was out of date.
