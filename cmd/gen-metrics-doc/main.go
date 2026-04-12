@@ -85,7 +85,7 @@ func main() {
 	err := run(
 		"pkg/telemetry/metrics.go",
 		"cmd/mcp-server/main.go",
-		"docs/telemetry.md.tmpl",
+		"wiki/tmpl/telemetry.md.tmpl",
 		"wiki/Telemetry.md",
 	)
 	switch {
