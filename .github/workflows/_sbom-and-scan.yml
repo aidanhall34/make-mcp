@@ -46,7 +46,7 @@ jobs:
         run: mkdir -p dist/ && cp artifacts/binaries-${{ matrix.arch }}/* dist/
 
       - name: Generate release SBOM
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@0.35.0
         with:
           scan-type: fs
           scan-ref: dist/
@@ -54,18 +54,18 @@ jobs:
           output: sbom-release-${{ matrix.arch }}.cdx.json
 
       - name: Scan release binaries
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@0.35.0
         with:
           scan-type: fs
           scan-ref: dist/
-          exit-code: '1'
+          exit-code: "1"
           severity: HIGH,CRITICAL
 
       - name: Load container image
         run: docker load -i "artifacts/container-${{ matrix.arch }}/make-mcp_${{ inputs.git-tag }}_linux_${{ matrix.arch }}.tar"
 
       - name: Generate container SBOM
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@0.35.0
         with:
           scan-type: image
           image-ref: ghcr.io/${{ inputs.repository-owner }}/make-mcp:${{ inputs.git-tag }}
@@ -73,11 +73,11 @@ jobs:
           output: sbom-image-${{ matrix.arch }}.cdx.json
 
       - name: Scan container image
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@0.35.0
         with:
           scan-type: image
           image-ref: ghcr.io/${{ inputs.repository-owner }}/make-mcp:${{ inputs.git-tag }}
-          exit-code: '1'
+          exit-code: "1"
           severity: HIGH,CRITICAL
 
       - name: Upload SBOMs to GitHub Release
