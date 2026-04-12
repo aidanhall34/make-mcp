@@ -339,6 +339,7 @@ jobs:
       - name: Load, push, and create multi-arch manifest
         env:
           GIT_TAG: ${{ needs.semantic-release.outputs.git_tag }}
+<<<<<<< HEAD
           SEM_VER: ${{ needs.semantic-release.outputs.sem_ver }}
           GIT_SHA: ${{ github.sha }}
         run: |
@@ -357,8 +358,27 @@ jobs:
 
           # Create the multi-arch manifest and retag :GIT_TAG to point at it,
           # so all tags are multi-arch indexes with no leftover single-arch tags.
+=======
+        run: |
+          set -euo pipefail
+          image="ghcr.io/${{ github.repository_owner }}/make-mcp"
+          for arch in amd64 arm64; do
+            docker load -i "dist/make-mcp_${GIT_TAG}_linux_${arch}.tar"
+            docker tag "${image}:${GIT_TAG}" "${image}:${GIT_TAG}-${arch}"
+            docker push "${image}:${GIT_TAG}-${arch}"
+          done
+
+      - name: Create and push multi-arch manifest
+        env:
+          GIT_TAG: ${{ needs.semantic-release.outputs.git_tag }}
+          SEM_VER: ${{ needs.semantic-release.outputs.sem_ver }}
+          GIT_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          image="ghcr.io/${{ github.repository_owner }}/make-mcp"
+          short_sha="${GIT_SHA:0:7}"
+>>>>>>> 7e73517 (fix(ci): fix the install tests)
           docker buildx imagetools create \
-            -t "${image}:${GIT_TAG}" \
             -t "${image}:${short_sha}" \
             -t "${image}:${SEM_VER}" \
             -t "${image}:latest" \
