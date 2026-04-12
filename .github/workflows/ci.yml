@@ -62,21 +62,43 @@ jobs:
     secrets:
       DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
 
-  smoke-tests-amd64:
-    needs: [build-images-amd64, build-releases-amd64]
+  smoke-tests-binary-amd64:
+    needs: [build-releases-amd64]
     uses: ./.github/workflows/_smoke-tests.yml
     with:
       arch: amd64
       image-tag: ci-${{ github.sha }}
+      type: binary
     secrets:
       DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
 
-  smoke-tests-arm64:
-    needs: [build-images-arm64, build-releases-arm64]
+  smoke-tests-container-amd64:
+    needs: [build-images-amd64]
+    uses: ./.github/workflows/_smoke-tests.yml
+    with:
+      arch: amd64
+      image-tag: ci-${{ github.sha }}
+      type: container
+    secrets:
+      DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+
+  smoke-tests-binary-arm64:
+    needs: [build-releases-arm64]
     uses: ./.github/workflows/_smoke-tests.yml
     with:
       arch: arm64
       image-tag: ci-${{ github.sha }}
+      type: binary
+    secrets:
+      DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+
+  smoke-tests-container-arm64:
+    needs: [build-images-arm64]
+    uses: ./.github/workflows/_smoke-tests.yml
+    with:
+      arch: arm64
+      image-tag: ci-${{ github.sha }}
+      type: container
     secrets:
       DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
 
@@ -85,20 +107,42 @@ jobs:
     secrets:
       DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
 
-  compatibility-tests-amd64:
-    needs: [build-images-amd64, build-releases-amd64]
+  compatibility-tests-binary-amd64:
+    needs: [build-releases-amd64]
     uses: ./.github/workflows/_compatibility-tests.yml
     with:
       arch: amd64
       image-tag: ci-${{ github.sha }}
+      type: binary
     secrets:
       DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
 
-  compatibility-tests-arm64:
-    needs: [build-images-arm64, build-releases-arm64]
+  compatibility-tests-container-amd64:
+    needs: [build-images-amd64]
+    uses: ./.github/workflows/_compatibility-tests.yml
+    with:
+      arch: amd64
+      image-tag: ci-${{ github.sha }}
+      type: container
+    secrets:
+      DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+
+  compatibility-tests-binary-arm64:
+    needs: [build-releases-arm64]
     uses: ./.github/workflows/_compatibility-tests.yml
     with:
       arch: arm64
       image-tag: ci-${{ github.sha }}
+      type: binary
+    secrets:
+      DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+
+  compatibility-tests-container-arm64:
+    needs: [build-images-arm64]
+    uses: ./.github/workflows/_compatibility-tests.yml
+    with:
+      arch: arm64
+      image-tag: ci-${{ github.sha }}
+      type: container
     secrets:
       DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}

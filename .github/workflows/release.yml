@@ -117,7 +117,13 @@ jobs:
       DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
 
   sbom-and-scan:
-    needs: [build-image-amd64, build-image-arm64, build-release-amd64, build-release-arm64]
+    needs:
+      [
+        build-image-amd64,
+        build-image-arm64,
+        build-release-amd64,
+        build-release-arm64,
+      ]
     name: sbom-and-scan
     runs-on: ubuntu-latest
     permissions:
@@ -214,7 +220,14 @@ jobs:
       DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
 
   release-binaries:
-    needs: [sbom-and-scan, smoke-tests-amd64, smoke-tests-arm64, compatibility-tests-amd64, compatibility-tests-arm64]
+    needs:
+      [
+        sbom-and-scan,
+        smoke-tests-amd64,
+        smoke-tests-arm64,
+        compatibility-tests-amd64,
+        compatibility-tests-arm64,
+      ]
     name: release-binaries
     runs-on: ubuntu-latest
     permissions:
@@ -269,7 +282,14 @@ jobs:
         run: ./.github/scripts/notify-discord.sh
 
   release-containers:
-    needs: [sbom-and-scan, smoke-tests-amd64, smoke-tests-arm64, compatibility-tests-amd64, compatibility-tests-arm64]
+    needs:
+      [
+        sbom-and-scan,
+        smoke-tests-amd64,
+        smoke-tests-arm64,
+        compatibility-tests-amd64,
+        compatibility-tests-arm64,
+      ]
     name: release-containers
     runs-on: ubuntu-latest
     permissions:

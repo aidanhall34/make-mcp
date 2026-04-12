@@ -9,12 +9,18 @@ on:
       image-tag:
         required: true
         type: string
+      type:
+        description: "Which jobs to run: binary, container, or all (default)"
+        required: false
+        type: string
+        default: all
     secrets:
       DISCORD_WEBHOOK_URL:
         required: false
 
 jobs:
   binary:
+    if: inputs.type == 'all' || inputs.type == 'binary'
     name: smoke-tests (binary-${{ inputs.arch }})
     runs-on: ubuntu-latest
     steps:
@@ -50,6 +56,7 @@ jobs:
         run: ./.github/scripts/notify-discord.sh
 
   container:
+    if: inputs.type == 'all' || inputs.type == 'container'
     name: smoke-tests (container-${{ inputs.arch }})
     runs-on: ubuntu-latest
     steps:

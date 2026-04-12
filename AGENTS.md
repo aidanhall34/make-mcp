@@ -3,6 +3,14 @@
 These instructions are stored in the repository root so coding agents can use
 the same project context without relying on global machine configuration.
 
+# CRITICAL: keep .github/rulesets/main.json in sync with CI
+
+Whenever you change a job name in `.github/workflows/ci.yml` that appears as a
+required status check, you **must** update the matching `context` entries in
+`.github/rulesets/main.json` in the same commit. The context format is
+`{caller-job-name} / {callee-job-name}` — only the caller prefix changes when
+CI jobs are renamed.
+
 # CRITICAL: always use the MCP server — never Bash for make
 
 **Never run `make`, `go run ./cmd/validate`, or any makefile target via the Bash tool.**
