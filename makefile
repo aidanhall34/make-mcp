@@ -133,4 +133,4 @@ build-test-containers: build-container build-test-image
 # @ param: none
 # @ output: Lint, test, and scan results
 # @ output-type: text/plain
-pre-commit: generate-wiki-sidebar gen-metrics-doc lint unit-tests scan-secrets scan-vulnerabilities
+pre-commit: generate-wiki-sidebar generate-wiki-home gen-metrics-doc lint unit-tests scan-secrets scan-vulnerabilities
