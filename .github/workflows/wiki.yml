@@ -25,6 +25,7 @@ jobs:
           wiki_url="https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.wiki.git"
           git clone "${wiki_url}" wiki-pub
           cp wiki/*.md wiki-pub/
+          cp -r wiki/images wiki-pub/
           cd wiki-pub
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
