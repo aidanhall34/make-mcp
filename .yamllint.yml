@@ -1,0 +1,25 @@
+extends: default
+
+rules:
+  # GitHub Actions and docker-compose files conventionally omit the --- marker.
+  document-start: disable
+
+  # Long run: blocks are unavoidable in GitHub Actions workflows.
+  line-length:
+    max: 160
+    level: warning
+
+  # yamllint flags bare `on:` and `off:` as truthy values.
+  # check-keys: false stops it from flagging top-level `on:` in workflow files.
+  truthy:
+    allowed-values: ["true", "false"]
+    check-keys: false
+
+  comments:
+    min-spaces-from-content: 1
+
+ignore: |
+  node_modules/
+  .venv/
+  dist/
+  dev/tmp/

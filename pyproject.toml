@@ -1,0 +1,8 @@
+[project]
+name = "make-mcp"
+version = "0.1.0"
+description = "Python tooling for make-mcp"
+requires-python = ">=3.13"
+dependencies = [
+    "yamllint>=1.38.0",
+]
