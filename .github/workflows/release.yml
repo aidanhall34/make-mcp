@@ -56,8 +56,15 @@ jobs:
       - name: Detect created tag
         id: version
         run: |
-          git fetch --tags
-          git_tag="$(git tag --points-at "${GITHUB_SHA}" | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n 1 || true)"
+          # @semantic-release/git pushes a changelog commit after the tag is
+          # created, so the tag points at that child commit, not GITHUB_SHA.
+          # Fetch tags and the current state of main so FETCH_HEAD == the
+          # changelog commit; fall back to GITHUB_SHA if none was pushed.
+          git fetch --tags origin main
+          git_tag="$(git tag --points-at FETCH_HEAD | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n 1 || true)"
+          if [ -z "${git_tag}" ]; then
+            git_tag="$(git tag --points-at "${GITHUB_SHA}" | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n 1 || true)"
+          fi
           if [ -n "${git_tag}" ]; then
             echo "released=true" >> "$GITHUB_OUTPUT"
             echo "git_tag=${git_tag}" >> "$GITHUB_OUTPUT"
