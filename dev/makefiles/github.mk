@@ -1,29 +1,41 @@
 SHELL=/usr/bin/env bash
 
-# @ name: Upload Branch Protection Rules
-# @ description: Applies branch protection rules to GitHub for each JSON file in .github/branch-protection/. Each file must be named after the branch it protects (e.g. main.json). Reads the current repo from the gh CLI.
+# @ name: Upload Repository Rulesets
+# @ description: Applies repository rulesets to GitHub for each JSON file in .github/rulesets/. Each file must be named after the ruleset it defines (e.g. main.json). Creates the ruleset if it does not exist, or updates it by name if it does.
 # @ risk: high
 # @ read-only: false
 # @ destructive: false
 # @ idempotent: true
 # @ open-world: true
 # @ param: none
-# @ output: Confirmation that branch protection was applied for each branch
+# @ output: Confirmation that each ruleset was created or updated
 # @ output-type: text/plain
-.PHONY: upload-branch-protection
-upload-branch-protection:
+.PHONY: upload-ruleset
+upload-ruleset:
 	@{ \
 		set -e ; \
 		repo="$$(gh repo view --json nameWithOwner -q .nameWithOwner)" ; \
-		for f in .github/branch-protection/*.json; do \
-			branch="$$(basename "$$f" .json)" ; \
-			printf 'applying branch protection for %s/%s...\n' "$$repo" "$$branch" ; \
-			gh api \
-				--method PUT \
+		for f in .github/rulesets/*.json; do \
+			name="$$(jq -r '.name' "$$f")" ; \
+			printf 'uploading ruleset "%s" for %s...\n' "$$name" "$$repo" ; \
+			existing_id="$$(gh api "/repos/$$repo/rulesets" \
 				-H "Accept: application/vnd.github+json" \
-				"/repos/$$repo/branches/$$branch/protection" \
-				--input "$$f" ; \
-			printf 'branch protection applied for %s\n' "$$branch" ; \
+				| jq -r ".[] | select(.name == \"$$name\") | .id // empty")" ; \
+			if [ -n "$$existing_id" ]; then \
+				gh api \
+					--method PUT \
+					-H "Accept: application/vnd.github+json" \
+					"/repos/$$repo/rulesets/$$existing_id" \
+					--input "$$f" ; \
+				printf 'ruleset "%s" updated (id: %s)\n' "$$name" "$$existing_id" ; \
+			else \
+				gh api \
+					--method POST \
+					-H "Accept: application/vnd.github+json" \
+					"/repos/$$repo/rulesets" \
+					--input "$$f" ; \
+				printf 'ruleset "%s" created\n' "$$name" ; \
+			fi ; \
 		done ; \
 	}
 
