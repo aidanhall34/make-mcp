@@ -1,0 +1,65 @@
+{
+  "name": "main",
+  "target": "branch",
+  "enforcement": "active",
+  "bypass_actors": [
+    {
+      "actor_id": 5,
+      "actor_type": "RepositoryRole",
+      "bypass_mode": "always"
+    }
+  ],
+  "conditions": {
+    "ref_name": {
+      "include": ["refs/heads/main"],
+      "exclude": []
+    }
+  },
+  "rules": [
+    {
+      "type": "deletion"
+    },
+    {
+      "type": "non_fast_forward"
+    },
+    {
+      "type": "required_linear_history"
+    },
+    {
+      "type": "pull_request",
+      "parameters": {
+        "dismiss_stale_reviews_on_push": true,
+        "require_code_owner_review": false,
+        "require_last_push_approval": true,
+        "required_approving_review_count": 1,
+        "required_review_thread_resolution": true
+      }
+    },
+    {
+      "type": "required_status_checks",
+      "parameters": {
+        "strict_required_status_checks_policy": true,
+        "required_status_checks": [
+          {"context": "lint / lint"},
+          {"context": "scan / scan (TruffleHog)"},
+          {"context": "scan / scan (Trivy)"},
+          {"context": "test / test"},
+          {"context": "bench / bench"},
+          {"context": "build-images-amd64 / build-images (amd64)"},
+          {"context": "build-images-arm64 / build-images (arm64)"},
+          {"context": "build-releases-amd64 / build-releases (amd64)"},
+          {"context": "build-releases-arm64 / build-releases (arm64)"},
+          {"context": "smoke-tests-amd64 / smoke-tests (binary-amd64)"},
+          {"context": "smoke-tests-amd64 / smoke-tests (container-amd64)"},
+          {"context": "smoke-tests-arm64 / smoke-tests (binary-arm64)"},
+          {"context": "smoke-tests-arm64 / smoke-tests (container-arm64)"},
+          {"context": "install-tests / install-tests"},
+          {"context": "compatibility-tests-amd64 / compatibility-tests (binary-amd64)"},
+          {"context": "compatibility-tests-amd64 / compatibility-tests (container-amd64)"},
+          {"context": "compatibility-tests-arm64 / compatibility-tests (binary-arm64)"},
+          {"context": "compatibility-tests-arm64 / compatibility-tests (container-arm64)"}
+        ]
+      }
+    }
+  ]
+}

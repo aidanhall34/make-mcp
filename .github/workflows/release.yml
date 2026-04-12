@@ -160,8 +160,48 @@ jobs:
           STARTED_AT: ${{ steps.started.outputs.at }}
         run: ./.github/scripts/notify-discord.sh
 
+  smoke-tests-amd64:
+    needs: [semantic-release, build-image-amd64, build-release-amd64]
+    if: needs.semantic-release.outputs.released == 'true'
+    uses: ./.github/workflows/_smoke-tests.yml
+    with:
+      arch: amd64
+      image-tag: ${{ needs.semantic-release.outputs.git_tag }}
+    secrets:
+      DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+
+  smoke-tests-arm64:
+    needs: [semantic-release, build-image-arm64, build-release-arm64]
+    if: needs.semantic-release.outputs.released == 'true'
+    uses: ./.github/workflows/_smoke-tests.yml
+    with:
+      arch: arm64
+      image-tag: ${{ needs.semantic-release.outputs.git_tag }}
+    secrets:
+      DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+
+  compatibility-tests-amd64:
+    needs: [semantic-release, build-image-amd64, build-release-amd64]
+    if: needs.semantic-release.outputs.released == 'true'
+    uses: ./.github/workflows/_compatibility-tests.yml
+    with:
+      arch: amd64
+      image-tag: ${{ needs.semantic-release.outputs.git_tag }}
+    secrets:
+      DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+
+  compatibility-tests-arm64:
+    needs: [semantic-release, build-image-arm64, build-release-arm64]
+    if: needs.semantic-release.outputs.released == 'true'
+    uses: ./.github/workflows/_compatibility-tests.yml
+    with:
+      arch: arm64
+      image-tag: ${{ needs.semantic-release.outputs.git_tag }}
+    secrets:
+      DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+
   release-binaries:
-    needs: sbom-and-scan
+    needs: [sbom-and-scan, smoke-tests-amd64, smoke-tests-arm64, compatibility-tests-amd64, compatibility-tests-arm64]
     name: release-binaries
     runs-on: ubuntu-latest
     permissions:
@@ -216,7 +256,7 @@ jobs:
         run: ./.github/scripts/notify-discord.sh
 
   release-containers:
-    needs: sbom-and-scan
+    needs: [sbom-and-scan, smoke-tests-amd64, smoke-tests-arm64, compatibility-tests-amd64, compatibility-tests-arm64]
     name: release-containers
     runs-on: ubuntu-latest
     permissions:
