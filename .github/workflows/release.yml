@@ -179,40 +179,80 @@ jobs:
           STARTED_AT: ${{ steps.started.outputs.at }}
         run: ./.github/scripts/notify-discord.sh
 
-  smoke-tests-amd64:
-    needs: [semantic-release, build-image-amd64, build-release-amd64]
+  smoke-tests-binary-amd64:
+    needs: [semantic-release, build-release-amd64]
     if: needs.semantic-release.outputs.released == 'true'
-    uses: ./.github/workflows/_smoke-tests.yml
+    uses: ./.github/workflows/_smoke-tests-binary.yml
     with:
       arch: amd64
       image-tag: ${{ needs.semantic-release.outputs.git_tag }}
     secrets:
       DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
 
-  smoke-tests-arm64:
-    needs: [semantic-release, build-image-arm64, build-release-arm64]
+  smoke-tests-container-amd64:
+    needs: [semantic-release, build-image-amd64]
     if: needs.semantic-release.outputs.released == 'true'
-    uses: ./.github/workflows/_smoke-tests.yml
+    uses: ./.github/workflows/_smoke-tests-container.yml
+    with:
+      arch: amd64
+      image-tag: ${{ needs.semantic-release.outputs.git_tag }}
+    secrets:
+      DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+
+  smoke-tests-binary-arm64:
+    needs: [semantic-release, build-release-arm64]
+    if: needs.semantic-release.outputs.released == 'true'
+    uses: ./.github/workflows/_smoke-tests-binary.yml
     with:
       arch: arm64
       image-tag: ${{ needs.semantic-release.outputs.git_tag }}
     secrets:
       DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
 
-  compatibility-tests-amd64:
-    needs: [semantic-release, build-image-amd64, build-release-amd64]
+  smoke-tests-container-arm64:
+    needs: [semantic-release, build-image-arm64]
     if: needs.semantic-release.outputs.released == 'true'
-    uses: ./.github/workflows/_compatibility-tests.yml
+    uses: ./.github/workflows/_smoke-tests-container.yml
+    with:
+      arch: arm64
+      image-tag: ${{ needs.semantic-release.outputs.git_tag }}
+    secrets:
+      DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+
+  compatibility-tests-binary-amd64:
+    needs: [semantic-release, build-release-amd64]
+    if: needs.semantic-release.outputs.released == 'true'
+    uses: ./.github/workflows/_compatibility-tests-binary.yml
     with:
       arch: amd64
       image-tag: ${{ needs.semantic-release.outputs.git_tag }}
     secrets:
       DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
 
-  compatibility-tests-arm64:
-    needs: [semantic-release, build-image-arm64, build-release-arm64]
+  compatibility-tests-container-amd64:
+    needs: [semantic-release, build-image-amd64]
     if: needs.semantic-release.outputs.released == 'true'
-    uses: ./.github/workflows/_compatibility-tests.yml
+    uses: ./.github/workflows/_compatibility-tests-container.yml
+    with:
+      arch: amd64
+      image-tag: ${{ needs.semantic-release.outputs.git_tag }}
+    secrets:
+      DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+
+  compatibility-tests-binary-arm64:
+    needs: [semantic-release, build-release-arm64]
+    if: needs.semantic-release.outputs.released == 'true'
+    uses: ./.github/workflows/_compatibility-tests-binary.yml
+    with:
+      arch: arm64
+      image-tag: ${{ needs.semantic-release.outputs.git_tag }}
+    secrets:
+      DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+
+  compatibility-tests-container-arm64:
+    needs: [semantic-release, build-image-arm64]
+    if: needs.semantic-release.outputs.released == 'true'
+    uses: ./.github/workflows/_compatibility-tests-container.yml
     with:
       arch: arm64
       image-tag: ${{ needs.semantic-release.outputs.git_tag }}
@@ -223,10 +263,14 @@ jobs:
     needs:
       [
         sbom-and-scan,
-        smoke-tests-amd64,
-        smoke-tests-arm64,
-        compatibility-tests-amd64,
-        compatibility-tests-arm64,
+        smoke-tests-binary-amd64,
+        smoke-tests-container-amd64,
+        smoke-tests-binary-arm64,
+        smoke-tests-container-arm64,
+        compatibility-tests-binary-amd64,
+        compatibility-tests-container-amd64,
+        compatibility-tests-binary-arm64,
+        compatibility-tests-container-arm64,
       ]
     name: release-binaries
     runs-on: ubuntu-latest
@@ -285,10 +329,14 @@ jobs:
     needs:
       [
         sbom-and-scan,
-        smoke-tests-amd64,
-        smoke-tests-arm64,
-        compatibility-tests-amd64,
-        compatibility-tests-arm64,
+        smoke-tests-binary-amd64,
+        smoke-tests-container-amd64,
+        smoke-tests-binary-arm64,
+        smoke-tests-container-arm64,
+        compatibility-tests-binary-amd64,
+        compatibility-tests-container-amd64,
+        compatibility-tests-binary-arm64,
+        compatibility-tests-container-arm64,
       ]
     name: release-containers
     runs-on: ubuntu-latest

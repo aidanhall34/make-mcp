@@ -1,4 +1,4 @@
-name: _compatibility-tests
+name: _compatibility-tests-container
 
 on:
   workflow_call:
@@ -9,54 +9,12 @@ on:
       image-tag:
         required: true
         type: string
-      type:
-        description: "Which jobs to run: binary, container, or all (default)"
-        required: false
-        type: string
-        default: all
     secrets:
       DISCORD_WEBHOOK_URL:
         required: false
 
 jobs:
-  binary:
-    if: inputs.type == 'all' || inputs.type == 'binary'
-    name: compatibility-tests (binary-${{ inputs.arch }})
-    runs-on: ubuntu-latest
-    steps:
-      - name: Record start time
-        id: started
-        run: echo "at=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
-
-      - name: Check out repository
-        uses: actions/checkout@v4
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
-
-      - name: Download binaries artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: binaries-${{ inputs.arch }}
-          path: dist/
-
-      - name: Run binary compatibility tests
-        run: |
-          chmod +x dist/make-mcp_linux_${{ inputs.arch }} dist/make-mcp-validate_linux_${{ inputs.arch }}
-          IMAGE_TAG="${{ inputs.image-tag }}" make integration-binary ARCH=${{ inputs.arch }}
-
-      - name: Notify Discord
-        if: failure()
-        env:
-          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
-          GH_TOKEN: ${{ github.token }}
-          JOB_NAME: "compatibility-tests (binary-${{ inputs.arch }})"
-          JOB_STATUS: ${{ job.status }}
-          STARTED_AT: ${{ steps.started.outputs.at }}
-        run: ./.github/scripts/notify-discord.sh
-
   container:
-    if: inputs.type == 'all' || inputs.type == 'container'
     name: compatibility-tests (container-${{ inputs.arch }})
     runs-on: ubuntu-latest
     steps:
