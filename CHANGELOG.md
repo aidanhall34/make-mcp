@@ -1,3 +1,7 @@
+## <small>1.0.1 (2026-04-12)</small>
+
+* fix(ci): fix release tags ([1c068c1](https://github.com/aidanhall34/make-mcp/commit/1c068c1))
+
 ## 1.0.0 (2026-04-12)
 
 * fix: Add in codex MCP configuration ([9ddc625](https://github.com/aidanhall34/make-mcp/commit/9ddc625))
