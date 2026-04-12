@@ -19,8 +19,7 @@ Teach your LLM how to understand common processes defined in makefiles, and prov
 
 ![Claudes list of tools](./images/claude_tools.png)
 
-`make-mcp` listens for requests over stdio or streamable HTTP\
-and serves provides context and execution capabilities for recipes defined in one or more Makefiles.
+## How it works
 
 Each annotated recipe is exposed as a distinct MCP tool. The server:
 
