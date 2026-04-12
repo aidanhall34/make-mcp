@@ -5,6 +5,10 @@ on:
     branches-ignore:
       - main
 
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   lint:
     uses: ./.github/workflows/_lint.yml
