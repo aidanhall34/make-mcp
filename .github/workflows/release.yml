@@ -133,6 +133,8 @@ jobs:
       ]
     if: needs.semantic-release.outputs.released == 'true'
     uses: ./.github/workflows/_sbom-and-scan.yml
+    permissions:
+      contents: write
     with:
       git-tag: ${{ needs.semantic-release.outputs.git_tag }}
       repository-owner: ${{ github.repository_owner }}
