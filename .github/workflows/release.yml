@@ -126,6 +126,7 @@ jobs:
   sbom-and-scan:
     needs:
       [
+        semantic-release,
         build-image-amd64,
         build-image-arm64,
         build-release-amd64,
@@ -224,6 +225,7 @@ jobs:
   release-binaries:
     needs:
       [
+        semantic-release,
         sbom-and-scan,
         smoke-tests-binary-amd64,
         smoke-tests-container-amd64,
@@ -290,6 +292,7 @@ jobs:
   release-containers:
     needs:
       [
+        semantic-release,
         sbom-and-scan,
         smoke-tests-binary-amd64,
         smoke-tests-container-amd64,
@@ -372,7 +375,7 @@ jobs:
         run: ./.github/scripts/notify-discord.sh
 
   pull-test-containers:
-    needs: release-containers
+    needs: [semantic-release, release-containers]
     name: pull-test-containers
     runs-on: ubuntu-latest
     strategy:
@@ -408,7 +411,7 @@ jobs:
         run: ./.github/scripts/notify-discord.sh
 
   install-test-releases:
-    needs: release-binaries
+    needs: [semantic-release, release-binaries]
     name: install-test-releases
     runs-on: ubuntu-latest
     strategy:
