@@ -1,0 +1,8 @@
+## 1.0.0 (2026-04-12)
+
+* fix: Add in codex MCP configuration ([9ddc625](https://github.com/aidanhall34/make-mcp/commit/9ddc625))
+* fix(ci): fix releases and wiki images ([894524f](https://github.com/aidanhall34/make-mcp/commit/894524f))
+* feat: Added markdown linting, improved docs, fix local OTEL for codex ([5069883](https://github.com/aidanhall34/make-mcp/commit/5069883))
+* feat: building wiki and fixing release pipeline ([7f4fd1d](https://github.com/aidanhall34/make-mcp/commit/7f4fd1d))
+* feat(release): v1 of the make-mcp server ([0f6610f](https://github.com/aidanhall34/make-mcp/commit/0f6610f))
+* init: v0 of the make-mcp, an MCP server for makefiles ([6df9be3](https://github.com/aidanhall34/make-mcp/commit/6df9be3))
