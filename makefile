@@ -1,5 +1,6 @@
 SHELL=/usr/bin/env bash
 LGTM_VERSION:= 0.23.0
+VENV ?= .venv
 DEV_DIR=./dev
 _LOG_DIR := $(DEV_DIR)/logs
 _MCP_PID_FILE        := $(CURDIR)/dev/run/make-mcp.pid
@@ -93,7 +94,7 @@ tests: unit-tests bench
 # @ param: none
 # @ output: Lint and validation results
 # @ output-type: text/plain
-lint: lint-dockerfile lint-makefile lint-go lint-markdown lint-tidy validate
+lint: lint-dockerfile lint-makefile lint-go lint-markdown lint-tidy lint-yaml validate
 
 .PHONY: build
 # @ name: Build

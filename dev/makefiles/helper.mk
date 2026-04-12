@@ -31,9 +31,15 @@ _INTEGRATION_RUN_ENV = \
 # Dev setup
 # ---------------------------------------------------------------------------
 
-# Writes compose_versions and creates GEMINI.md symlink.
+# Creates a Python 3.13 venv with uv and installs project Python dependencies.
+.PHONY: setup-python
+setup-python:
+	uv venv --python 3.13 "$(VENV)"
+	uv sync
+
+# Writes compose_versions, creates GEMINI.md symlink, installs Node and Python deps.
 .PHONY: setup-env
-setup-env:
+setup-env: setup-python
 	printf "LGTM_VERSION=$(LGTM_VERSION)" > "$(DEV_DIR)/compose_versions"
 	ln -sf AGENTS.md GEMINI.md
 	npm install

@@ -129,13 +129,13 @@ jobs:
           set -euo pipefail
           mkdir -p dist/
           image_name="ghcr.io/${{ github.repository_owner }}/make-mcp"
-          
+
           for arch in amd64 arm64; do
             # Release archive SBOM
             cp artifacts/binaries-${arch}/* dist/
             trivy fs --format cyclonedx --output "sbom-release-${arch}.cdx.json" dist/
             trivy fs --exit-code 1 --severity HIGH,CRITICAL dist/
-            
+
             # Container SBOM
             tar_file="artifacts/container-${arch}/make-mcp_${GIT_TAG}_linux_${arch}.tar"
             docker load -i "${tar_file}"
@@ -231,7 +231,7 @@ jobs:
           make package-release-archive \
             VERSION="${GIT_TAG}" \
             ARCH=${{ matrix.arch }}
-          
+
           cd dist/
           sha256sum "make-mcp_${GIT_TAG}_linux_${{ matrix.arch }}.tar.gz" > "make-mcp_${GIT_TAG}_linux_${{ matrix.arch }}.sha256"
 
