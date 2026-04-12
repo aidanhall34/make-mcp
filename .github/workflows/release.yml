@@ -131,60 +131,13 @@ jobs:
         build-release-amd64,
         build-release-arm64,
       ]
-    name: sbom-and-scan
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - name: Record start time
-        id: started
-        run: echo "at=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
-
-      - name: Check out repository
-        uses: actions/checkout@v4
-
-      - name: Download all artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: artifacts/
-
-      - name: Generate SBOMs and Scan
-        env:
-          GIT_TAG: ${{ needs.semantic-release.outputs.git_tag }}
-        run: |
-          set -euo pipefail
-          mkdir -p dist/
-          image_name="ghcr.io/${{ github.repository_owner }}/make-mcp"
-
-          for arch in amd64 arm64; do
-            # Release archive SBOM
-            cp artifacts/binaries-${arch}/* dist/
-            trivy fs --format cyclonedx --output "sbom-release-${arch}.cdx.json" dist/
-            trivy fs --exit-code 1 --severity HIGH,CRITICAL dist/
-
-            # Container SBOM
-            tar_file="artifacts/container-${arch}/make-mcp_${GIT_TAG}_linux_${arch}.tar"
-            docker load -i "${tar_file}"
-            trivy image --format cyclonedx --output "sbom-image-${arch}.cdx.json" "${image_name}:${GIT_TAG}"
-            trivy image --exit-code 1 --severity HIGH,CRITICAL "${image_name}:${GIT_TAG}"
-          done
-
-      - name: Upload SBOMs to GitHub Release
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GIT_TAG: ${{ needs.semantic-release.outputs.git_tag }}
-        run: |
-          gh release upload "${GIT_TAG}" sbom-*.json --clobber
-
-      - name: Notify Discord
-        if: failure()
-        env:
-          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
-          GH_TOKEN: ${{ github.token }}
-          JOB_NAME: "sbom-and-scan"
-          JOB_STATUS: ${{ job.status }}
-          STARTED_AT: ${{ steps.started.outputs.at }}
-        run: ./.github/scripts/notify-discord.sh
+    if: needs.semantic-release.outputs.released == 'true'
+    uses: ./.github/workflows/_sbom-and-scan.yml
+    with:
+      git-tag: ${{ needs.semantic-release.outputs.git_tag }}
+      repository-owner: ${{ github.repository_owner }}
+    secrets:
+      DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
 
   smoke-tests-binary-amd64:
     needs: [semantic-release, build-release-amd64]
