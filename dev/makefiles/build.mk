@@ -15,7 +15,7 @@ build-validator:
 	@mkdir -p "$(_LOG_DIR)"
 	@{ go build -o ./bin/make-mcp-validate ./cmd/validate ; } \
 		$(call _tee-log,build-validator) ; \
-	wait
+	exit_code=$$? ; wait ; exit $$exit_code
 
 .PHONY: build-mcp-server
 # @ name: Build MCP Server
@@ -32,7 +32,7 @@ build-mcp-server:
 	@mkdir -p "$(_LOG_DIR)"
 	@{ go build -o ./bin/make-mcp ./cmd/mcp-server ; } \
 		$(call _tee-log,build-mcp-server) ; \
-	wait
+	exit_code=$$? ; wait ; exit $$exit_code
 
 .PHONY: build-container
 # @ name: Build Container
@@ -53,7 +53,7 @@ build-container:
 			--build-arg "OTEL_EXPORTER_OTLP_ENDPOINT=$(OTEL_TEST_ENDPOINT)" \
 			-t "$(IMAGE_NAME):$(IMAGE_TAG)" . ; \
 	} $(call _tee-log,build-container) ; \
-	wait
+	exit_code=$$? ; wait ; exit $$exit_code
 
 # @ name: Run
 # @ description: Compiles and runs the MCP server locally using the default configuration.

@@ -110,7 +110,7 @@ override with `OTEL_EXPORTER_PROMETHEUS_HOST` and `OTEL_EXPORTER_PROMETHEUS_PORT
 | Unit | — |
 | Labels | `destructive`, `idempotent`, `open_world`, `read_only`, `risk` |
 
-# Dashboards
+## Dashboards
 
 A dashboard for working with this repo can be found at `./dev/dashboards/development-dashboard.json`.\
 ![make-mcp key metrics dashboard panels](./images/make-mcp-development-panels.png)\

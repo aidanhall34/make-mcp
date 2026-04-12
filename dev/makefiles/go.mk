@@ -32,7 +32,7 @@ unit-tests:
 	@mkdir -p "$(_LOG_DIR)"
 	@{ go test -race -cover -coverprofile=coverage.out ./... ; } \
 		$(call _tee-log,unit-tests) ; \
-	wait
+	exit_code=$$? ; wait ; exit $$exit_code
 
 # @ name: Go lang Benchmarks
 # @ description: Runs all Go benchmark tests across every package and reports memory allocations.
@@ -48,7 +48,7 @@ bench:
 	@mkdir -p "$(_LOG_DIR)"
 	@{ go test -bench=. -benchmem -run='^$$' ./... ; } \
 		$(call _tee-log,bench) ; \
-	wait
+	exit_code=$$? ; wait ; exit $$exit_code
 
 # @ name: Format
 # @ description: Formats all Go source and test files in the cmd and pkg directories.
