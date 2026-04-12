@@ -1,0 +1,96 @@
+name: _sbom-and-scan
+
+on:
+  workflow_call:
+    inputs:
+      git-tag:
+        required: true
+        type: string
+      repository-owner:
+        required: true
+        type: string
+    secrets:
+      DISCORD_WEBHOOK_URL:
+        required: false
+
+jobs:
+  sbom-and-scan:
+    name: sbom-and-scan (${{ matrix.arch }})
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    strategy:
+      matrix:
+        arch: [amd64, arm64]
+    steps:
+      - name: Record start time
+        id: started
+        run: echo "at=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
+
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Download binaries artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: binaries-${{ matrix.arch }}
+          path: artifacts/binaries-${{ matrix.arch }}/
+
+      - name: Download container artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: container-${{ matrix.arch }}
+          path: artifacts/container-${{ matrix.arch }}/
+
+      - name: Prepare release binaries
+        run: mkdir -p dist/ && cp artifacts/binaries-${{ matrix.arch }}/* dist/
+
+      - name: Generate release SBOM
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: fs
+          scan-ref: dist/
+          format: cyclonedx
+          output: sbom-release-${{ matrix.arch }}.cdx.json
+
+      - name: Scan release binaries
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: fs
+          scan-ref: dist/
+          exit-code: '1'
+          severity: HIGH,CRITICAL
+
+      - name: Load container image
+        run: docker load -i "artifacts/container-${{ matrix.arch }}/make-mcp_${{ inputs.git-tag }}_linux_${{ matrix.arch }}.tar"
+
+      - name: Generate container SBOM
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: image
+          image-ref: ghcr.io/${{ inputs.repository-owner }}/make-mcp:${{ inputs.git-tag }}
+          format: cyclonedx
+          output: sbom-image-${{ matrix.arch }}.cdx.json
+
+      - name: Scan container image
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: image
+          image-ref: ghcr.io/${{ inputs.repository-owner }}/make-mcp:${{ inputs.git-tag }}
+          exit-code: '1'
+          severity: HIGH,CRITICAL
+
+      - name: Upload SBOMs to GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "${{ inputs.git-tag }}" sbom-*.json --clobber
+
+      - name: Notify Discord
+        if: failure()
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          GH_TOKEN: ${{ github.token }}
+          JOB_NAME: "sbom-and-scan (${{ matrix.arch }})"
+          JOB_STATUS: ${{ job.status }}
+          STARTED_AT: ${{ steps.started.outputs.at }}
+        run: ./.github/scripts/notify-discord.sh
