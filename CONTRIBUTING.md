@@ -12,7 +12,7 @@
 ```sh
 git clone https://github.com/aidanhall34/make-mcp.git
 cd make-mcp
-make setup   # installs git hooks and Node.js dev dependencies
+make setup   # installs git hooks and Node.js and Python dev dependencies
 ```
 
 `make setup` installs a pre-commit hook that runs linting, unit tests, and
