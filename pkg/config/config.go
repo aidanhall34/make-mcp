@@ -1,6 +1,7 @@
 package config
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"time"
@@ -45,6 +46,13 @@ type Config struct {
 	// Listen is the HTTP bind address when HTTP transport is enabled.
 	Listen string `yaml:"listen"`
 
+	// LogPath is the destination for JSON logs. Defaults to stderr.
+	LogPath string `yaml:"log_path"`
+
+	// Debug enables debug-level logging. When true, tool call arguments,
+	// stdout, and stderr are included in log output.
+	Debug bool `yaml:"debug"`
+
 	// Timeouts configures per-risk execution timeouts.
 	Timeouts Timeouts `yaml:"timeouts"`
 }
@@ -55,6 +63,7 @@ func Default() Config {
 		Delimiter: DefaultDelimiter,
 		Transport: DefaultTransport,
 		Listen:    DefaultListenAddress,
+		LogPath:   "stderr",
 		Timeouts: Timeouts{
 			Low:    10 * time.Minute,
 			Medium: 10 * time.Minute,
@@ -64,13 +73,16 @@ func Default() Config {
 }
 
 // LoadFile reads a YAML config file at path and unmarshals it into a Config.
+// Unknown keys cause an error.
 func LoadFile(path string) (Config, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return Config{}, fmt.Errorf("read %s: %w", path, err)
 	}
 	var cfg Config
-	if err := yaml.Unmarshal(data, &cfg); err != nil {
+	dec := yaml.NewDecoder(bytes.NewReader(data))
+	dec.KnownFields(true)
+	if err := dec.Decode(&cfg); err != nil {
 		return Config{}, fmt.Errorf("parse %s: %w", path, err)
 	}
 	return cfg, nil
@@ -94,6 +106,12 @@ func Merge(base, override Config) Config {
 	}
 	if override.Listen != "" {
 		out.Listen = override.Listen
+	}
+	if override.LogPath != "" {
+		out.LogPath = override.LogPath
+	}
+	if override.Debug {
+		out.Debug = true
 	}
 	if override.Timeouts.Low != 0 {
 		out.Timeouts.Low = override.Timeouts.Low

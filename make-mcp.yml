@@ -26,6 +26,16 @@ transport: "stdio"
 # Default: "127.0.0.1:9378"
 listen: "127.0.0.1:9378"
 
+# log_path: destination for JSON logs.
+# One of: stderr, or a file path.
+# Default: "stderr"
+log_path: "stderr"
+
+# debug: enable debug-level logging.
+# When true, tool call arguments, stdout, and stderr are included in logs.
+# Default: false
+debug: false
+
 # timeouts: per-risk execution timeouts for tool invocations.
 # Default: 10m for all risk levels.
 timeouts:

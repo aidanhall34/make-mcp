@@ -1,0 +1,23 @@
+# make-mcp development server configuration.
+# Used by 'make mcp-server-up' to run the server locally for LLM access.
+# OTel environment variables are injected by the make recipe.
+delimiter: "@"
+makefiles:
+  - ./makefile
+  - ./dev/makefiles/ci.mk
+  - ./dev/makefiles/go.mk
+  - ./dev/makefiles/lint.mk
+  - ./dev/makefiles/scan.mk
+  - ./dev/makefiles/build.mk
+  - ./dev/makefiles/generate.mk
+  - ./dev/makefiles/dev.mk
+  - ./dev/makefiles/github.mk
+strict: true
+transport: "http"
+listen: "127.0.0.1:9378"
+log_path: "dev/logs/make-mcp-server.log"
+debug: true
+timeouts:
+  low: 10m
+  medium: 10m
+  high: 10m

@@ -81,8 +81,14 @@ func (w *Watcher) Close() error {
 }
 
 func (w *Watcher) loop() {
-	defer close(w.events)
-	defer close(w.errors)
+	defer func() {
+		// Hold mu so flush() can't race on w.events between its done-check
+		// and the actual channel close.
+		w.mu.Lock()
+		close(w.events)
+		close(w.errors)
+		w.mu.Unlock()
+	}()
 
 	for {
 		select {
@@ -102,6 +108,10 @@ func (w *Watcher) loop() {
 			}
 			if !shouldHandle(event) {
 				continue
+			}
+			if event.Has(fsnotify.Create) || event.Has(fsnotify.Rename) {
+				// Re-add watch in case the file was replaced (atomic save)
+				_ = w.raw.Add(event.Name)
 			}
 			w.enqueue(event.Name)
 		}
@@ -128,18 +138,44 @@ func (w *Watcher) flush() {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
+	// Check whether the watcher has been stopped. If so, w.events is about to
+	// be (or has been) closed under w.mu in loop's defer; skip the send.
+	select {
+	case <-w.done:
+		return
+	default:
+	}
+
+	var nextSettle time.Duration
 	now := time.Now()
+
 	for path, readyAt := range w.pending {
-		if now.Before(readyAt) {
-			if w.timer != nil {
-				w.timer.Reset(time.Until(readyAt))
+		if now.After(readyAt) || now.Equal(readyAt) {
+			delete(w.pending, path)
+			select {
+			case w.events <- Event{Path: path}:
+			default:
+				// If channel is full, we still want to try sending later or
+				// just drop it if we must, but for reload, we should try to
+				// keep it. However, a full buffer usually means the consumer
+				// is stuck. We'll re-add it to pending to try again.
+				w.pending[path] = now.Add(w.settle)
 			}
-			return
+			continue
 		}
-		delete(w.pending, path)
-		select {
-		case w.events <- Event{Path: path}:
-		default:
+
+		// File not ready yet, track when it will be
+		wait := time.Until(readyAt)
+		if nextSettle == 0 || wait < nextSettle {
+			nextSettle = wait
+		}
+	}
+
+	if nextSettle > 0 {
+		if w.timer == nil {
+			w.timer = time.AfterFunc(nextSettle, w.flush)
+		} else {
+			w.timer.Reset(nextSettle)
 		}
 	}
 }

@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os/exec"
 	"path/filepath"
 	"strconv"
@@ -31,6 +32,10 @@ type Request struct {
 	Args     map[string]any
 	Timeout  time.Duration
 	MakePath string
+	// RootDir, when non-empty, sets the working directory for make and suppresses
+	// the -f flag. Use this so sub-makefiles inherit variables from the root
+	// makefile (which includes them all) rather than being invoked standalone.
+	RootDir string
 }
 
 // Result contains the captured process output.
@@ -58,6 +63,12 @@ func (e *Error) Error() string {
 
 // Run executes make for a single parsed recipe.
 func Run(ctx context.Context, req Request) (Result, error) {
+	return RunStream(ctx, req, nil, nil)
+}
+
+// RunStream executes make for a single parsed recipe, optionally streaming
+// output to the provided writers.
+func RunStream(ctx context.Context, req Request, stdout, stderr io.Writer) (Result, error) {
 	if req.Recipe.ID == "" {
 		return Result{}, &Error{
 			Code:    ErrorCodeInvalidParams,
@@ -70,7 +81,11 @@ func Run(ctx context.Context, req Request) (Result, error) {
 		makePath = "make"
 	}
 
-	args, err := buildArgs(req.Recipe, req.Args)
+	sourceMakefile := req.Recipe.SourceFile
+	if req.RootDir != "" {
+		sourceMakefile = ""
+	}
+	args, err := buildArgs(req.Recipe, req.Args, sourceMakefile)
 	if err != nil {
 		return Result{}, err
 	}
@@ -84,11 +99,23 @@ func Run(ctx context.Context, req Request) (Result, error) {
 	defer cancel()
 
 	cmd := exec.CommandContext(runCtx, makePath, args...)
-	cmd.Dir = workingDir(req.Recipe.SourceFile)
+	if req.RootDir != "" {
+		cmd.Dir = req.RootDir
+	} else {
+		cmd.Dir = workingDir(req.Recipe.SourceFile)
+	}
 
 	var stdoutBuf, stderrBuf bytes.Buffer
-	cmd.Stdout = &stdoutBuf
-	cmd.Stderr = &stderrBuf
+	if stdout != nil {
+		cmd.Stdout = io.MultiWriter(&stdoutBuf, stdout)
+	} else {
+		cmd.Stdout = &stdoutBuf
+	}
+	if stderr != nil {
+		cmd.Stderr = io.MultiWriter(&stderrBuf, stderr)
+	} else {
+		cmd.Stderr = &stderrBuf
+	}
 
 	err = cmd.Run()
 	result := Result{
@@ -131,7 +158,7 @@ func workingDir(sourceFile string) string {
 	return filepath.Dir(sourceFile)
 }
 
-func buildArgs(recipe parser.Recipe, provided map[string]any) ([]string, error) {
+func buildArgs(recipe parser.Recipe, provided map[string]any, sourceMakefile string) ([]string, error) {
 	allowed := map[string]parser.Param{}
 	for _, param := range recipe.Params {
 		allowed[param.Name] = param
@@ -139,8 +166,8 @@ func buildArgs(recipe parser.Recipe, provided map[string]any) ([]string, error) 
 
 	args := []string{}
 	args = append(args, "--no-print-directory")
-	if recipe.SourceFile != "" {
-		args = append(args, "-f", filepath.Base(recipe.SourceFile))
+	if sourceMakefile != "" {
+		args = append(args, "-f", filepath.Base(sourceMakefile))
 	}
 	args = append(args, recipe.ID)
 

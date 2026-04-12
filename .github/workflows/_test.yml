@@ -1,0 +1,40 @@
+name: _test
+
+on:
+  workflow_call:
+    secrets:
+      DISCORD_WEBHOOK_URL:
+        required: false
+
+jobs:
+  unit-tests:
+    name: test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Record start time
+        id: started
+        run: echo "at=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
+
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Run unit tests
+        run: |
+          mkdir -p dev/logs
+          make unit-tests 2>&1 | tee dev/logs/unit-tests.log
+
+      - name: Notify Discord
+        if: failure()
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          GH_TOKEN: ${{ github.token }}
+          JOB_NAME: "test"
+          JOB_STATUS: ${{ job.status }}
+          STARTED_AT: ${{ steps.started.outputs.at }}
+        run: ./.github/scripts/notify-discord.sh

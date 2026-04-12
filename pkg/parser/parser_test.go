@@ -1,6 +1,8 @@
 package parser_test
 
 import (
+	"fmt"
+	"os"
 	"strings"
 	"testing"
 
@@ -944,5 +946,171 @@ func TestParseMakefiles_MissingFileReturnsError(t *testing.T) {
 	_, err := parser.ParseMakefiles([]string{"/nonexistent/Makefile"}, defaultOpts)
 	if err == nil {
 		t.Error("expected error for missing file, got nil")
+	}
+}
+
+func TestValidationError_Error_WithSourceFile(t *testing.T) {
+	ve := parser.ValidationError{
+		RecipeID:   "hello",
+		SourceFile: "/some/Makefile",
+		Err:        fmt.Errorf("missing name"),
+	}
+	got := ve.Error()
+	if !strings.Contains(got, "/some/Makefile") {
+		t.Errorf("Error() = %q, want it to contain the source file path", got)
+	}
+}
+
+func TestParseMakefile_ParamMissingType(t *testing.T) {
+	// "@param: name | description" — only one word before the pipe; should error.
+	input := `
+# @ name: Hello World
+# @ description: Greets.
+# @ risk: low
+# @ param: name | The name to greet
+# @ output: greeting
+# @ output-type: text/plain
+hello-world:
+	@echo "Hello"
+`
+	result, err := parser.ParseMakefile(strings.NewReader(input), defaultOpts)
+	if err != nil {
+		t.Fatalf("unexpected parse error: %v", err)
+	}
+	if result.Valid() {
+		t.Error("expected validation error for param missing type, got none")
+	}
+}
+
+func TestParseMakefile_InvalidParamName(t *testing.T) {
+	// Param name starts with a digit — invalid per paramNameRE.
+	input := `
+# @ name: Hello World
+# @ description: Greets.
+# @ risk: low
+# @ param: 123bad string | Bad name
+# @ output: greeting
+# @ output-type: text/plain
+hello-world:
+	@echo "Hello"
+`
+	result, err := parser.ParseMakefile(strings.NewReader(input), defaultOpts)
+	if err != nil {
+		t.Fatalf("unexpected parse error: %v", err)
+	}
+	if result.Valid() {
+		t.Error("expected validation error for invalid param name, got none")
+	}
+}
+
+func TestParseMakefile_PlainCommentInsideAnnotationBlock(t *testing.T) {
+	// A non-annotation comment line inside an annotation block must not reset
+	// the block — the recipe should still be parsed correctly.
+	input := `
+# @ name: Hello World
+# This is a plain comment, not an annotation.
+# @ description: Prints a greeting.
+# @ risk: low
+# @ param: none
+# @ output: greeting
+# @ output-type: text/plain
+hello-world:
+	@echo "Hello"
+`
+	result, err := parser.ParseMakefile(strings.NewReader(input), defaultOpts)
+	if err != nil {
+		t.Fatalf("unexpected parse error: %v", err)
+	}
+	if len(result.Recipes) != 1 {
+		t.Fatalf("expected 1 recipe, got %d", len(result.Recipes))
+	}
+	if result.Recipes[0].Name != "Hello World" {
+		t.Errorf("Name = %q, want %q", result.Recipes[0].Name, "Hello World")
+	}
+	if !result.Valid() {
+		t.Errorf("expected valid result, got errors: %v", result.Errors)
+	}
+}
+
+func TestParseMakefile_DotTargetAfterAnnotation(t *testing.T) {
+	// A dot-prefixed target (e.g. .special:) immediately after a full annotation
+	// block resets state without producing a recipe.
+	input := `
+# @ name: Special
+# @ description: A dot-prefixed internal target.
+# @ risk: low
+# @ param: none
+# @ output: nothing
+# @ output-type: text/plain
+.special-internal:
+	@echo noop
+`
+	result, err := parser.ParseMakefile(strings.NewReader(input), defaultOpts)
+	if err != nil {
+		t.Fatalf("unexpected parse error: %v", err)
+	}
+	if len(result.Recipes) != 0 {
+		t.Errorf("expected 0 recipes for dot-prefixed target, got %d", len(result.Recipes))
+	}
+}
+
+func TestParseMakefile_BlankLineInAnnotationBlock(t *testing.T) {
+	// A blank line between the annotation block and the target resets state,
+	// so no recipe should be produced.
+	input := "# @ name: Something\n# @ description: desc.\n# @ risk: low\n# @ param: none\n# @ output: out\n# @ output-type: text/plain\n\nsomething:\n\t@echo hi\n"
+	result, err := parser.ParseMakefile(strings.NewReader(input), defaultOpts)
+	if err != nil {
+		t.Fatalf("unexpected parse error: %v", err)
+	}
+	if len(result.Recipes) != 0 {
+		t.Errorf("expected 0 recipes (blank line resets annotation state), got %d", len(result.Recipes))
+	}
+}
+
+func TestParseMakefilePath_WithValidationErrors(t *testing.T) {
+	// Parsing a file with an invalid risk level produces a ValidationError
+	// and ParseMakefilePath sets SourceFile on each error.
+	dir := t.TempDir()
+	path := dir + "/Makefile"
+	content := "# @ name: Bad\n# @ description: Invalid risk.\n# @ risk: extreme\n# @ param: none\n# @ output: nothing\n# @ output-type: text/plain\nbad:\n\t@echo bad\n"
+	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	result, err := parser.ParseMakefilePath(path, defaultOpts)
+	if err != nil {
+		t.Fatalf("ParseMakefilePath() error = %v", err)
+	}
+	if len(result.Errors) == 0 {
+		t.Fatal("expected validation errors for invalid risk, got none")
+	}
+	for _, ve := range result.Errors {
+		if ve.SourceFile == "" {
+			t.Errorf("SourceFile not set on error: %v", ve)
+		}
+	}
+}
+
+func TestParseMakefile_TargetWithPrerequisites(t *testing.T) {
+	// Target lines like "build: tests format" are valid Make; the parser should
+	// use the first word as the target ID.
+	input := `
+# @ name: Build
+# @ description: Compiles everything.
+# @ risk: low
+# @ param: none
+# @ output: binaries
+# @ output-type: application/octet-stream
+build: tests format
+	@go build ./...
+`
+	result, err := parser.ParseMakefile(strings.NewReader(input), defaultOpts)
+	if err != nil {
+		t.Fatalf("unexpected parse error: %v", err)
+	}
+	if len(result.Recipes) != 1 {
+		t.Fatalf("expected 1 recipe, got %d", len(result.Recipes))
+	}
+	if result.Recipes[0].ID != "build" {
+		t.Errorf("ID = %q, want %q", result.Recipes[0].ID, "build")
 	}
 }

@@ -1,0 +1,98 @@
+name: CI
+
+on:
+  push:
+
+jobs:
+  lint:
+    uses: ./.github/workflows/_lint.yml
+    secrets:
+      DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+
+  scan:
+    uses: ./.github/workflows/_scan.yml
+    secrets:
+      DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+
+  test:
+    uses: ./.github/workflows/_test.yml
+    secrets:
+      DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+
+  bench:
+    uses: ./.github/workflows/_bench.yml
+    secrets:
+      DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+
+  build-images-amd64:
+    uses: ./.github/workflows/_build-image.yml
+    with:
+      arch: amd64
+      image-tag: ci-${{ github.sha }}
+    secrets:
+      DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${{ secrets.OTEL_EXPORTER_OTLP_ENDPOINT }}
+
+  build-images-arm64:
+    uses: ./.github/workflows/_build-image.yml
+    with:
+      arch: arm64
+      image-tag: ci-${{ github.sha }}
+    secrets:
+      DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${{ secrets.OTEL_EXPORTER_OTLP_ENDPOINT }}
+
+  build-releases-amd64:
+    uses: ./.github/workflows/_build-release.yml
+    with:
+      arch: amd64
+    secrets:
+      DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+
+  build-releases-arm64:
+    uses: ./.github/workflows/_build-release.yml
+    with:
+      arch: arm64
+    secrets:
+      DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+
+  smoke-tests-amd64:
+    needs: [build-images-amd64, build-releases-amd64]
+    uses: ./.github/workflows/_smoke-tests.yml
+    with:
+      arch: amd64
+      image-tag: ci-${{ github.sha }}
+    secrets:
+      DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+
+  smoke-tests-arm64:
+    needs: [build-images-arm64, build-releases-arm64]
+    uses: ./.github/workflows/_smoke-tests.yml
+    with:
+      arch: arm64
+      image-tag: ci-${{ github.sha }}
+    secrets:
+      DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+
+  install-tests:
+    uses: ./.github/workflows/_install-tests.yml
+    secrets:
+      DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+
+  compatibility-tests-amd64:
+    needs: [build-images-amd64, build-releases-amd64]
+    uses: ./.github/workflows/_compatibility-tests.yml
+    with:
+      arch: amd64
+      image-tag: ci-${{ github.sha }}
+    secrets:
+      DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+
+  compatibility-tests-arm64:
+    needs: [build-images-arm64, build-releases-arm64]
+    uses: ./.github/workflows/_compatibility-tests.yml
+    with:
+      arch: arm64
+      image-tag: ci-${{ github.sha }}
+    secrets:
+      DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}

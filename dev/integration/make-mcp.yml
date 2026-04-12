@@ -1,0 +1,12 @@
+# make-mcp configuration used exclusively by the integration test container.
+# Transport is set to HTTP so k6 can reach the server over the Docker network.
+delimiter: "@"
+makefiles:
+  - ./makefile
+strict: false
+transport: "http"
+listen: "0.0.0.0:9378"
+timeouts:
+  low: 30s
+  medium: 30s
+  high: 30s

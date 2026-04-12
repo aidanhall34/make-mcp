@@ -1,0 +1,14 @@
+---
+services:
+  make-mcp-server:
+    image: ${MAKE_MCP_IMAGE:-ghcr.io/aidanhall34/make-mcp:latest}
+    pull_policy: never
+    volumes:
+      - ./integration/make-mcp.yml:/opt/make-mcp/make-mcp.yml:ro
+      - ../testdata/Makefile:/opt/make-mcp/makefile:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO /dev/null http://localhost:9378/ready"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+      start_period: 5s

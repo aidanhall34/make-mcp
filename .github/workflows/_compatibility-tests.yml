@@ -1,0 +1,90 @@
+name: _compatibility-tests
+
+on:
+  workflow_call:
+    inputs:
+      arch:
+        required: true
+        type: string
+      image-tag:
+        required: true
+        type: string
+    secrets:
+      DISCORD_WEBHOOK_URL:
+        required: false
+
+jobs:
+  binary:
+    name: compatibility-tests (binary-${{ inputs.arch }})
+    runs-on: ubuntu-latest
+    steps:
+      - name: Record start time
+        id: started
+        run: echo "at=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
+
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Download binaries artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: binaries-${{ inputs.arch }}
+          path: dist/
+
+      - name: Run binary compatibility tests
+        run: |
+          chmod +x dist/make-mcp_linux_${{ inputs.arch }} dist/make-mcp-validate_linux_${{ inputs.arch }}
+          IMAGE_TAG="${{ inputs.image-tag }}" make integration-binary ARCH=${{ inputs.arch }}
+
+      - name: Notify Discord
+        if: failure()
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          GH_TOKEN: ${{ github.token }}
+          JOB_NAME: "compatibility-tests (binary-${{ inputs.arch }})"
+          JOB_STATUS: ${{ job.status }}
+          STARTED_AT: ${{ steps.started.outputs.at }}
+        run: ./.github/scripts/notify-discord.sh
+
+  container:
+    name: compatibility-tests (container-${{ inputs.arch }})
+    runs-on: ubuntu-latest
+    steps:
+      - name: Record start time
+        id: started
+        run: echo "at=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
+
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Download container tar artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: container-${{ inputs.arch }}
+          path: dist/
+
+      - name: Load container image
+        run: docker load -i dist/make-mcp_${{ inputs.image-tag }}_linux_${{ inputs.arch }}.tar
+
+      - name: Build test image
+        run: make build-test-image IMAGE_TAG="${{ inputs.image-tag }}" ARCH=${{ inputs.arch }}
+
+      - name: Run container compatibility tests
+        run: |
+          IMAGE_TAG="${{ inputs.image-tag }}" make integration-prebuilt
+
+      - name: Notify Discord
+        if: failure()
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          GH_TOKEN: ${{ github.token }}
+          JOB_NAME: "compatibility-tests (container-${{ inputs.arch }})"
+          JOB_STATUS: ${{ job.status }}
+          STARTED_AT: ${{ steps.started.outputs.at }}
+        run: ./.github/scripts/notify-discord.sh
