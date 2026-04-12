@@ -110,4 +110,4 @@ act-run:
 			$(ACT_EVENT) \
 			$$act_args ; \
 	} $(call _tee-log,act-run) ; \
-	wait
+	exit_code=$$? ; wait ; exit $$exit_code

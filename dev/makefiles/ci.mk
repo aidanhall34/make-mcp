@@ -20,7 +20,7 @@ build-binaries:
 		CGO_ENABLED="0" GOOS="linux" GOARCH="$(ARCH)" go build -o "$(DIST_DIR)/make-mcp-validate_linux_$(ARCH)" ./cmd/validate ; \
 		printf 'built %s %s\n' "$(ARCH)" "$$(ls -1 "$(DIST_DIR)"/*_linux_$(ARCH))" ; \
 	} $(call _tee-log,build-binaries-$(ARCH)) ; \
-	wait
+	exit_code=$$? ; wait ; exit $$exit_code
 
 .PHONY: build-container-tar
 # @ name: Build Container Tar
@@ -49,7 +49,7 @@ build-container-tar:
 			. ; \
 		printf 'saved %s\n' "$(DIST_DIR)/make-mcp_$(IMAGE_TAG)_linux_$(ARCH).tar" ; \
 	} $(call _tee-log,build-container-tar-$(ARCH)) ; \
-	wait
+	exit_code=$$? ; wait ; exit $$exit_code
 
 .PHONY: build-test-image
 # @ name: Build Test Image
@@ -74,7 +74,7 @@ build-test-image:
 			-f "$(DEV_DIR)/integration/Dockerfile.test-server" \
 			"$(DEV_DIR)/integration" ; \
 	} $(call _tee-log,build-test-image) ; \
-	wait
+	exit_code=$$? ; wait ; exit $$exit_code
 
 .PHONY: package-release-archive
 # @ name: Package Release Archive
@@ -196,7 +196,7 @@ test-binary:
 		printf '\nbinary smoke tests passed (%s)\n' "$(ARCH)" ; \
 	} $(call _tee-log,test-binary-$(ARCH)) ; \
 	kill "$$server_pid" 2>/dev/null || true ; \
-	wait
+	exit_code=$$? ; wait ; exit $$exit_code
 
 .PHONY: smoke-test-container
 # @ name: Container Smoke Test
@@ -235,4 +235,4 @@ smoke-test-container: build-test-image
 		curl -sf "http://localhost:9378/ready" ; \
 		printf '\ncontainer smoke test passed (%s)\n' "$(ARCH)" ; \
 	} $(call _tee-log,smoke-test-container-$(ARCH)) ; \
-	wait
+	exit_code=$$? ; wait ; exit $$exit_code

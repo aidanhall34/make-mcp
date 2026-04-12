@@ -16,7 +16,7 @@ lint-tidy:
 		go mod tidy ; \
 		git diff --exit-code "go.mod" "go.sum" ; \
 	} $(call _tee-log,lint-tidy) ; \
-	wait
+	exit_code=$$? ; wait ; exit $$exit_code
 
 # @ name: Lint Markdown
 # @ description: Lints all markdown files in the repository with markdownlint.
@@ -32,7 +32,7 @@ lint-markdown:
 	@mkdir -p "$(_LOG_DIR)"
 	@{ npm run lint:markdown ; } \
 		$(call _tee-log,lint-markdown) ; \
-	wait
+	exit_code=$$? ; wait ; exit $$exit_code
 
 # @ name: Lint Go
 # @ description: Verifies that Go files are formatted and pass go vet.
@@ -54,7 +54,7 @@ lint-go:
 		fi ; \
 		go vet ./... ; \
 	} $(call _tee-log,lint-go) ; \
-	wait
+	exit_code=$$? ; wait ; exit $$exit_code
 
 # @ name: Lint Dockerfile
 # @ description: Lints all Dockerfiles in the repository with hadolint running in a Docker container. Fails if any exceptions are found.
@@ -76,7 +76,7 @@ lint-dockerfile:
 			hadolint/hadolint:v$(HADOLINT_VERSION) \
 			hadolint --failure-threshold warning $$dockerfiles ; \
 	} $(call _tee-log,lint-dockerfile) ; \
-	wait
+	exit_code=$$? ; wait ; exit $$exit_code
 
 .PHONY: lint-yaml
 # @ name: Lint YAML
@@ -93,7 +93,7 @@ lint-yaml:
 	@mkdir -p "$(_LOG_DIR)"
 	@{ "$(VENV)/bin/yamllint" -c .yamllint.yml . ; } \
 		$(call _tee-log,lint-yaml) ; \
-	wait
+	exit_code=$$? ; wait ; exit $$exit_code
 
 .PHONY: lint-makefile
 # @ name: Lint Makefile
@@ -118,4 +118,4 @@ lint-makefile:
 				/checkmake "$$f" ; \
 		done ; \
 	} $(call _tee-log,lint-makefile) ; \
-	wait
+	exit_code=$$? ; wait ; exit $$exit_code
