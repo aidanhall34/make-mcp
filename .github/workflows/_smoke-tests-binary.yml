@@ -36,7 +36,8 @@ jobs:
 
       - name: Run binary smoke tests
         run: |
-          chmod +x dist/make-mcp_linux_${{ inputs.arch }} dist/make-mcp-validate_linux_${{ inputs.arch }}
+          mv dist/make-mcp_linux_${{ inputs.arch }} dist/make-mcp
+          mv dist/make-mcp-validate_linux_${{ inputs.arch }} dist/make-mcp-validate
           make test-binary ARCH=${{ inputs.arch }}
 
       - name: Notify Discord
