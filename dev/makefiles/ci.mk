@@ -158,7 +158,7 @@ integration-binary: integration-build-k6
 
 .PHONY: test-binary
 # @ name: Binary Smoke Tests
-# @ description: Runs smoke tests against the pre-built mcp-server and validate binaries in ./dist for the target architecture. Verifies that validate accepts the project makefile, starts the MCP server in HTTP mode, polls /ready, and confirms it responds. On an amd64 host, arm64 binaries require QEMU binfmt_misc registration (provided automatically by docker/setup-qemu-action in CI).
+# @ description: Runs smoke tests against the pre-built mcp-server and validate binaries in ./dist. Expects binaries named make-mcp and make-mcp-validate (the names used in release archives). Verifies that validate accepts the project makefile, starts the MCP server in HTTP mode, polls /ready, and confirms it responds. On an amd64 host, arm64 binaries require QEMU binfmt_misc registration (provided automatically by docker/setup-qemu-action in CI).
 # @ risk: low
 # @ read-only: true
 # @ destructive: false
@@ -171,8 +171,8 @@ test-binary:
 	@mkdir -p "$(_LOG_DIR)"
 	@{ \
 		set -e ; \
-		mcp_server="$(DIST_DIR)/make-mcp_linux_$(ARCH)" ; \
-		validate_bin="$(DIST_DIR)/make-mcp-validate_linux_$(ARCH)" ; \
+		mcp_server="$(DIST_DIR)/make-mcp" ; \
+		validate_bin="$(DIST_DIR)/make-mcp-validate" ; \
 		for f in "$$mcp_server" "$$validate_bin"; do \
 			[ -f "$$f" ] || { printf 'binary not found: %s\n' "$$f" ; exit 1 ; } ; \
 			chmod +x "$$f" ; \

@@ -20,6 +20,7 @@ jobs:
     outputs:
       released: ${{ steps.version.outputs.released }}
       git_tag: ${{ steps.version.outputs.git_tag }}
+      sem_ver: ${{ steps.version.outputs.sem_ver }}
     steps:
       - name: Record start time
         id: started
@@ -68,9 +69,11 @@ jobs:
           if [ -n "${git_tag}" ]; then
             echo "released=true" >> "$GITHUB_OUTPUT"
             echo "git_tag=${git_tag}" >> "$GITHUB_OUTPUT"
+            echo "sem_ver=${git_tag#v}" >> "$GITHUB_OUTPUT"
           else
             echo "released=false" >> "$GITHUB_OUTPUT"
             echo "git_tag=" >> "$GITHUB_OUTPUT"
+            echo "sem_ver=" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Notify Discord
@@ -336,30 +339,27 @@ jobs:
       - name: Load and push arch images
         env:
           GIT_TAG: ${{ needs.semantic-release.outputs.git_tag }}
-          GIT_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
           image="ghcr.io/${{ github.repository_owner }}/make-mcp"
-          short_sha="${GIT_SHA:0:7}"
           for arch in amd64 arm64; do
             docker load -i "dist/make-mcp_${GIT_TAG}_linux_${arch}.tar"
             docker tag "${image}:${GIT_TAG}" "${image}:${GIT_TAG}-${arch}"
-            docker tag "${image}:${GIT_TAG}" "${image}:${short_sha}-${arch}"
             docker push "${image}:${GIT_TAG}-${arch}"
-            docker push "${image}:${short_sha}-${arch}"
           done
 
       - name: Create and push multi-arch manifest
         env:
           GIT_TAG: ${{ needs.semantic-release.outputs.git_tag }}
+          SEM_VER: ${{ needs.semantic-release.outputs.sem_ver }}
           GIT_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
           image="ghcr.io/${{ github.repository_owner }}/make-mcp"
           short_sha="${GIT_SHA:0:7}"
           docker buildx imagetools create \
-            -t "${image}:${GIT_TAG}" \
             -t "${image}:${short_sha}" \
+            -t "${image}:${SEM_VER}" \
             -t "${image}:latest" \
             "${image}:${GIT_TAG}-amd64" \
             "${image}:${GIT_TAG}-arm64"
@@ -439,9 +439,8 @@ jobs:
           GIT_TAG: ${{ needs.semantic-release.outputs.git_tag }}
         run: |
           tar -xzf "dist/make-mcp_${GIT_TAG}_linux_${{ matrix.arch }}.tar.gz" -C dist/
-          # The tar extracts into a subdirectory named make-mcp_VERSION_linux_ARCH
-          # But the smoke test target expects binaries in dist/
-          mv dist/make-mcp_${GIT_TAG}_linux_${{ matrix.arch }}/* dist/
+          cp "dist/make-mcp_${GIT_TAG}_linux_${{ matrix.arch }}/make-mcp" dist/make-mcp
+          cp "dist/make-mcp_${GIT_TAG}_linux_${{ matrix.arch }}/make-mcp-validate" dist/make-mcp-validate
           make test-binary ARCH=${{ matrix.arch }}
 
       - name: Notify Discord
@@ -454,29 +453,9 @@ jobs:
           STARTED_AT: ${{ steps.started.outputs.at }}
         run: ./.github/scripts/notify-discord.sh
 
-  notify-release-success:
-    needs: [semantic-release, pull-test-containers, install-test-releases]
-    if: success() && needs.semantic-release.outputs.released == 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Record start time
-        id: started
-        run: echo "at=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
-
-      - name: Check out repository
-        uses: actions/checkout@v4
-
-      - name: Notify Discord
-        env:
-          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
-          GH_TOKEN: ${{ github.token }}
-          JOB_NAME: "Release Published (${{ needs.semantic-release.outputs.git_tag }})"
-          JOB_STATUS: "success"
-          STARTED_AT: ${{ steps.started.outputs.at }}
-        run: ./.github/scripts/notify-discord.sh
-
   publish-wiki:
     name: publish-wiki
+    needs: [install-test-releases, pull-test-containers]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -501,3 +480,30 @@ jobs:
             && echo "wiki already up to date" \
             || git commit -m "chore(wiki): sync from main [skip ci]"
           git push
+
+  notify-release-success:
+    needs:
+      [
+        semantic-release,
+        pull-test-containers,
+        install-test-releases,
+        publish-wiki,
+      ]
+    if: success() && needs.semantic-release.outputs.released == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Record start time
+        id: started
+        run: echo "at=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
+
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Notify Discord
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          GH_TOKEN: ${{ github.token }}
+          JOB_NAME: "Release Published (${{ needs.semantic-release.outputs.git_tag }})"
+          JOB_STATUS: "success"
+          STARTED_AT: ${{ steps.started.outputs.at }}
+        run: ./.github/scripts/notify-discord.sh
