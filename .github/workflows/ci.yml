@@ -21,10 +21,18 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.13"
+
+      - name: Install Python dependencies
+        run: uv sync
+
       - name: Detect changes requiring code CI
         id: filter
         run: |
-          python3 .github/scripts/detect_changes.py \
+          uv run python3 .github/scripts/detect_changes.py \
             --git-base 'origin/main' \
             --ignore-file '.github/scripts/ignore-patterns.txt' \
             --ignore 'wiki/*' \
@@ -53,14 +61,14 @@ jobs:
 
   bench:
     needs: [detect-changes]
-    if: needs.detect-changes.outputs.run-code-ci == 'true'
+    if: needs.detect-changes.outputs.run-code-ci == 'true' && !github.event.act
     uses: ./.github/workflows/_bench.yml
     secrets:
       DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
 
   build-images-amd64:
     needs: [detect-changes]
-    if: needs.detect-changes.outputs.run-code-ci == 'true'
+    if: needs.detect-changes.outputs.run-code-ci == 'true' && !github.event.act
     uses: ./.github/workflows/_build-image.yml
     with:
       arch: amd64
@@ -71,7 +79,7 @@ jobs:
 
   build-images-arm64:
     needs: [detect-changes]
-    if: needs.detect-changes.outputs.run-code-ci == 'true'
+    if: needs.detect-changes.outputs.run-code-ci == 'true' && !github.event.act
     uses: ./.github/workflows/_build-image.yml
     with:
       arch: arm64
@@ -82,7 +90,7 @@ jobs:
 
   build-releases-amd64:
     needs: [detect-changes]
-    if: needs.detect-changes.outputs.run-code-ci == 'true'
+    if: needs.detect-changes.outputs.run-code-ci == 'true' && !github.event.act
     uses: ./.github/workflows/_build-release.yml
     with:
       arch: amd64
@@ -91,7 +99,7 @@ jobs:
 
   build-releases-arm64:
     needs: [detect-changes]
-    if: needs.detect-changes.outputs.run-code-ci == 'true'
+    if: needs.detect-changes.outputs.run-code-ci == 'true' && !github.event.act
     uses: ./.github/workflows/_build-release.yml
     with:
       arch: arm64
@@ -100,7 +108,7 @@ jobs:
 
   smoke-tests-binary-amd64:
     needs: [detect-changes, build-releases-amd64]
-    if: needs.detect-changes.outputs.run-code-ci == 'true'
+    if: needs.detect-changes.outputs.run-code-ci == 'true' && !github.event.act
     uses: ./.github/workflows/_smoke-tests-binary.yml
     with:
       arch: amd64
@@ -110,7 +118,7 @@ jobs:
 
   smoke-tests-container-amd64:
     needs: [detect-changes, build-images-amd64]
-    if: needs.detect-changes.outputs.run-code-ci == 'true'
+    if: needs.detect-changes.outputs.run-code-ci == 'true' && !github.event.act
     uses: ./.github/workflows/_smoke-tests-container.yml
     with:
       arch: amd64
@@ -120,7 +128,7 @@ jobs:
 
   smoke-tests-binary-arm64:
     needs: [detect-changes, build-releases-arm64]
-    if: needs.detect-changes.outputs.run-code-ci == 'true'
+    if: needs.detect-changes.outputs.run-code-ci == 'true' && !github.event.act
     uses: ./.github/workflows/_smoke-tests-binary.yml
     with:
       arch: arm64
@@ -130,7 +138,7 @@ jobs:
 
   smoke-tests-container-arm64:
     needs: [detect-changes, build-images-arm64]
-    if: needs.detect-changes.outputs.run-code-ci == 'true'
+    if: needs.detect-changes.outputs.run-code-ci == 'true' && !github.event.act
     uses: ./.github/workflows/_smoke-tests-container.yml
     with:
       arch: arm64
@@ -140,14 +148,14 @@ jobs:
 
   install-tests:
     needs: [detect-changes]
-    if: needs.detect-changes.outputs.run-code-ci == 'true'
+    if: needs.detect-changes.outputs.run-code-ci == 'true' && !github.event.act
     uses: ./.github/workflows/_install-tests.yml
     secrets:
       DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
 
   compatibility-tests-binary-amd64:
     needs: [detect-changes, build-releases-amd64]
-    if: needs.detect-changes.outputs.run-code-ci == 'true'
+    if: needs.detect-changes.outputs.run-code-ci == 'true' && !github.event.act
     uses: ./.github/workflows/_compatibility-tests-binary.yml
     with:
       arch: amd64
@@ -157,7 +165,7 @@ jobs:
 
   compatibility-tests-container-amd64:
     needs: [detect-changes, build-images-amd64]
-    if: needs.detect-changes.outputs.run-code-ci == 'true'
+    if: needs.detect-changes.outputs.run-code-ci == 'true' && !github.event.act
     uses: ./.github/workflows/_compatibility-tests-container.yml
     with:
       arch: amd64
@@ -167,7 +175,7 @@ jobs:
 
   compatibility-tests-binary-arm64:
     needs: [detect-changes, build-releases-arm64]
-    if: needs.detect-changes.outputs.run-code-ci == 'true'
+    if: needs.detect-changes.outputs.run-code-ci == 'true' && !github.event.act
     uses: ./.github/workflows/_compatibility-tests-binary.yml
     with:
       arch: arm64
@@ -177,7 +185,7 @@ jobs:
 
   compatibility-tests-container-arm64:
     needs: [detect-changes, build-images-arm64]
-    if: needs.detect-changes.outputs.run-code-ci == 'true'
+    if: needs.detect-changes.outputs.run-code-ci == 'true' && !github.event.act
     uses: ./.github/workflows/_compatibility-tests-container.yml
     with:
       arch: arm64
