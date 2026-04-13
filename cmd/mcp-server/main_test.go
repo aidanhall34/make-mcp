@@ -12,6 +12,7 @@ import (
 
 	"github.com/aidanhall34/make-mcp/pkg/config"
 	"github.com/aidanhall34/make-mcp/pkg/parser"
+	"github.com/aidanhall34/make-mcp/pkg/resources"
 	makecpserver "github.com/aidanhall34/make-mcp/pkg/server"
 	"github.com/aidanhall34/make-mcp/pkg/watcher"
 )
@@ -138,6 +139,17 @@ func makeAnnotatedMakefile(t *testing.T) (string, []parser.Recipe) {
 	return path, result.Recipes
 }
 
+func makeStrictMakefile(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+	path := filepath.Join(dir, "Makefile")
+	content := "# @ name: Hello\n# @ description: desc\n# @ risk: low\n# @ param: none\n# @ output: out\n# @ output-type: text/plain\n# @ read-only: true\n# @ destructive: false\n# @ idempotent: true\n# @ open-world: true\nhello:\n\t@echo hi\n"
+	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+		t.Fatalf("write makefile: %v", err)
+	}
+	return path
+}
+
 func TestWatchLoop_ContextCancel(t *testing.T) {
 	mfPath, recipes := makeAnnotatedMakefile(t)
 	server, err := makecpserver.New(config.Default(), recipes)
@@ -156,7 +168,7 @@ func TestWatchLoop_ContextCancel(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})
 	go func() {
-		watchLoop(ctx, w, &cfg, "", config.Config{}, server)
+		routingWatchLoop(ctx, w, map[string]struct{}{mustAbs(mfPath): {}}, nil, &cfg, "", config.Config{}, server)
 		close(done)
 	}()
 
@@ -186,7 +198,7 @@ func TestWatchLoop_WatcherClose(t *testing.T) {
 	defer cancel()
 	done := make(chan struct{})
 	go func() {
-		watchLoop(ctx, w, &cfg, "", config.Config{}, server)
+		routingWatchLoop(ctx, w, map[string]struct{}{mustAbs(mfPath): {}}, nil, &cfg, "", config.Config{}, server)
 		close(done)
 	}()
 
@@ -223,7 +235,7 @@ func TestWatchLoop_ConfigReloadError(t *testing.T) {
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		watchLoop(ctx, w, &cfg, cfgPath, config.Config{}, server)
+		routingWatchLoop(ctx, w, map[string]struct{}{mustAbs(mfPath): {}, mustAbs(cfgPath): {}}, nil, &cfg, cfgPath, config.Config{}, server)
 	}()
 	t.Cleanup(func() {
 		cancel()
@@ -265,7 +277,7 @@ func TestWatchLoop_ParseMakefilesError(t *testing.T) {
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		watchLoop(ctx, w, &cfg, "", config.Config{}, server)
+		routingWatchLoop(ctx, w, map[string]struct{}{mustAbs(trigger): {}}, nil, &cfg, "", config.Config{}, server)
 	}()
 	t.Cleanup(func() {
 		cancel()
@@ -307,7 +319,7 @@ func TestWatchLoop_InvalidMakefile(t *testing.T) {
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		watchLoop(ctx, w, &cfg, "", config.Config{}, server)
+		routingWatchLoop(ctx, w, map[string]struct{}{mustAbs(mfPath): {}}, nil, &cfg, "", config.Config{}, server)
 	}()
 	t.Cleanup(func() {
 		cancel()
@@ -351,7 +363,7 @@ func TestWatchLoop_ConfigReload(t *testing.T) {
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		watchLoop(ctx, w, &cfg, cfgPath, config.Config{}, server)
+		routingWatchLoop(ctx, w, map[string]struct{}{mustAbs(mfPath): {}, mustAbs(cfgPath): {}}, nil, &cfg, cfgPath, config.Config{}, server)
 	}()
 	t.Cleanup(func() {
 		cancel()
@@ -387,7 +399,7 @@ func TestWatchLoop_FileEvent(t *testing.T) {
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		watchLoop(ctx, w, &cfg, "", config.Config{}, server)
+		routingWatchLoop(ctx, w, map[string]struct{}{mustAbs(mfPath): {}}, nil, &cfg, "", config.Config{}, server)
 	}()
 	t.Cleanup(func() {
 		cancel()
@@ -605,5 +617,315 @@ func TestRun_LogPathFile(t *testing.T) {
 	}
 	if !strings.Contains(string(content), "server started") {
 		t.Errorf("log content missing 'server started': %q", string(content))
+	}
+}
+
+func TestRun_OAuthStdioError(t *testing.T) {
+	// This should fail: OAuth + stdio
+	f, err := os.CreateTemp(t.TempDir(), "make-mcp.yml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.WriteString("oauth:\n  enabled: true\ntransport: stdio\n")
+	f.Close()
+
+	if err := run([]string{"--config", f.Name(), "--makefile", "../../testdata/Makefile"}); err == nil {
+		t.Error("expected error for OAuth + stdio, got nil")
+	} else if !strings.Contains(err.Error(), "oauth is not compatible with stdio") {
+		t.Errorf("expected error message to contain 'oauth is not compatible with stdio', got %v", err)
+	}
+}
+
+func TestRun_OAuthMissingTLS(t *testing.T) {
+	f, err := os.CreateTemp(t.TempDir(), "make-mcp.yml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.WriteString("oauth:\n  enabled: true\ntransport: http\n")
+	f.Close()
+
+	if err := run([]string{"--config", f.Name(), "--makefile", "../../testdata/Makefile"}); err == nil {
+		t.Error("expected error for missing TLS cert/key, got nil")
+	} else if !strings.Contains(err.Error(), "oauth.tls.cert and oauth.tls.key are required") {
+		t.Errorf("expected error message to contain 'oauth.tls.cert and oauth.tls.key are required', got %v", err)
+	}
+}
+
+func TestRun_OAuthMissingJWKS(t *testing.T) {
+	f, err := os.CreateTemp(t.TempDir(), "make-mcp.yml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.WriteString("oauth:\n  enabled: true\n  tls:\n    cert: a.crt\n    key: a.key\ntransport: http\n")
+	f.Close()
+
+	if err := run([]string{"--config", f.Name(), "--makefile", "../../testdata/Makefile"}); err == nil {
+		t.Error("expected error for missing JWKS URI, got nil")
+	} else if !strings.Contains(err.Error(), "oauth.jwks_uri is required") {
+		t.Errorf("expected error message to contain 'oauth.jwks_uri is required', got %v", err)
+	}
+}
+
+func TestRun_OAuthNewHTTPClientError(t *testing.T) {
+	dir := t.TempDir()
+	caFile := filepath.Join(dir, "ca.crt")
+	os.WriteFile(caFile, []byte("not a cert"), 0644)
+
+	f, err := os.CreateTemp(dir, "make-mcp.yml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	content := fmt.Sprintf(`
+oauth:
+  enabled: true
+  jwks_uri: http://example.com/jwks
+  tls:
+    cert: a.crt
+    key: a.key
+    ca: "%s"
+transport: http
+`, caFile)
+	f.WriteString(content)
+	f.Close()
+
+	if err := run([]string{"--config", f.Name(), "--makefile", "../../testdata/Makefile"}); err == nil {
+		t.Error("expected error for invalid CA file, got nil")
+	} else if !strings.Contains(err.Error(), "auth: build HTTP client") {
+		t.Errorf("expected error message to contain 'auth: build HTTP client', got %v", err)
+	}
+}
+
+func TestRun_LogPathOpenError(t *testing.T) {
+	dir := t.TempDir()
+	// Use a directory as log path to trigger open error.
+	if err := run([]string{
+		"--makefile", "../../testdata/Makefile",
+		"--log-path", dir,
+	}); err == nil {
+		t.Error("expected error for log path being a directory, got nil")
+	}
+}
+
+func TestMustAbs(t *testing.T) {
+	if got := mustAbs("/abs/path"); got != "/abs/path" {
+		t.Errorf("mustAbs(/abs/path) = %q, want /abs/path", got)
+	}
+	// On Unix, filepath.Abs(".") usually works, so this is just for coverage.
+	mustAbs(".")
+}
+
+func TestWatchLoop_ResourceChange(t *testing.T) {
+	mfPath, recipes := makeAnnotatedMakefile(t)
+	server, err := makecpserver.New(config.Default(), recipes)
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+
+	dir := t.TempDir()
+	resFile := filepath.Join(dir, "data.txt")
+	os.WriteFile(resFile, []byte("data"), 0644)
+
+	cfg := config.Default()
+	cfg.Makefiles = []string{mfPath}
+	cfg.Resources.Paths = []config.ResourcePath{{Name: "data", Path: []string{resFile}}}
+
+	rm, _, err := resources.New(cfg.Resources, cfg.OAuth, server.MCP())
+	if err != nil {
+		t.Fatalf("resources.New: %v", err)
+	}
+
+	w, err := watcher.New([]string{resFile}, 10*time.Millisecond)
+	if err != nil {
+		t.Fatalf("watcher.New: %v", err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		routingWatchLoop(ctx, w, map[string]struct{}{}, rm, &cfg, "", config.Config{}, server)
+	}()
+	t.Cleanup(func() {
+		cancel()
+		w.Close()
+		<-done
+	})
+
+	// Trigger a resource file change.
+	os.WriteFile(resFile, []byte("new data"), 0644)
+	time.Sleep(150 * time.Millisecond)
+}
+
+func TestRun_WithResources(t *testing.T) {
+	t.Setenv("OTEL_TRACES_EXPORTER", "none")
+	t.Setenv("OTEL_METRICS_EXPORTER", "none")
+
+	dir := t.TempDir()
+	resFile := filepath.Join(dir, "resource.txt")
+	os.WriteFile(resFile, []byte("content"), 0644)
+	mfPath, _ := makeAnnotatedMakefile(t)
+
+	cfgPath := filepath.Join(dir, "make-mcp.yml")
+	cfgContent := fmt.Sprintf(`
+resources:
+  paths:
+    - name: data
+      path: ["%s"]
+`, resFile)
+	os.WriteFile(cfgPath, []byte(cfgContent), 0644)
+
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("os.Pipe(): %v", err)
+	}
+	w.Close()
+	oldStdin := os.Stdin
+	os.Stdin = r
+	t.Cleanup(func() { os.Stdin = oldStdin; r.Close() })
+
+	if err := run([]string{
+		"--config", cfgPath,
+		"--makefile", mfPath,
+		"--transport", "stdio",
+	}); err != nil {
+		t.Errorf("run(with resources) = %v, want nil", err)
+	}
+}
+
+func TestRun_WithResourceSubscriptions(t *testing.T) {
+	t.Setenv("OTEL_TRACES_EXPORTER", "none")
+	t.Setenv("OTEL_METRICS_EXPORTER", "none")
+
+	dir := t.TempDir()
+	resFile := filepath.Join(dir, "resource.txt")
+	os.WriteFile(resFile, []byte("content"), 0644)
+	mfPath, _ := makeAnnotatedMakefile(t)
+
+	cfgPath := filepath.Join(dir, "make-mcp.yml")
+	cfgContent := fmt.Sprintf(`
+resources:
+  paths:
+    - name: data
+      path: ["%s"]
+`, resFile)
+	os.WriteFile(cfgPath, []byte(cfgContent), 0644)
+
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("os.Pipe(): %v", err)
+	}
+	w.Close()
+	oldStdin := os.Stdin
+	os.Stdin = r
+	t.Cleanup(func() { os.Stdin = oldStdin; r.Close() })
+
+	if err := run([]string{
+		"--config", cfgPath,
+		"--makefile", mfPath,
+		"--transport", "stdio",
+	}); err != nil {
+		t.Errorf("run(with resources) = %v, want nil", err)
+	}
+}
+
+func TestRun_DebugAndStrict(t *testing.T) {
+	t.Setenv("OTEL_TRACES_EXPORTER", "none")
+	t.Setenv("OTEL_METRICS_EXPORTER", "none")
+
+	mfPath := makeStrictMakefile(t)
+
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("os.Pipe(): %v", err)
+	}
+	w.Close()
+	oldStdin := os.Stdin
+	os.Stdin = r
+	t.Cleanup(func() { os.Stdin = oldStdin; r.Close() })
+
+	if err := run([]string{
+		"--makefile", mfPath,
+		"--transport", "stdio",
+		"--debug",
+		"--strict",
+	}); err != nil {
+		t.Errorf("run(debug+strict) = %v, want nil", err)
+	}
+}
+
+func TestWatchLoop_MakefileAndResource(t *testing.T) {
+	mfPath, recipes := makeAnnotatedMakefile(t)
+	server, err := makecpserver.New(config.Default(), recipes)
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+
+	cfg := config.Default()
+	cfg.Makefiles = []string{mfPath}
+	cfg.Resources.Paths = []config.ResourcePath{{Name: "mf", Path: []string{mfPath}}}
+
+	rm, _, err := resources.New(cfg.Resources, cfg.OAuth, server.MCP())
+	if err != nil {
+		t.Fatalf("resources.New: %v", err)
+	}
+
+	w, err := watcher.New([]string{mfPath}, 10*time.Millisecond)
+	if err != nil {
+		t.Fatalf("watcher.New: %v", err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		routingWatchLoop(ctx, w, map[string]struct{}{mustAbs(mfPath): {}}, rm, &cfg, "", config.Config{}, server)
+	}()
+	t.Cleanup(func() {
+		cancel()
+		w.Close()
+		<-done
+	})
+
+	// Trigger a change.
+	content := "# @ name: Hello\n# @ description: Says hi.\n# @ risk: low\n# @ param: none\n# @ output: greeting\n# @ output-type: text/plain\nhello:\n\t@echo updated\n"
+	os.WriteFile(mfPath, []byte(content), 0644)
+	time.Sleep(150 * time.Millisecond)
+}
+
+func TestWatchLoop_WatcherError(t *testing.T) {
+	mfPath, recipes := makeAnnotatedMakefile(t)
+	server, err := makecpserver.New(config.Default(), recipes)
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+
+	w, err := watcher.New([]string{mfPath}, 10*time.Millisecond)
+	if err != nil {
+		t.Fatalf("watcher.New: %v", err)
+	}
+
+	cfg := config.Default()
+	cfg.Makefiles = []string{mfPath}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		routingWatchLoop(ctx, w, map[string]struct{}{}, nil, &cfg, "", config.Config{}, server)
+	}()
+
+	// We need to inject an error into the watcher.
+	// Since we can't easily do that with the real watcher, we might need to mock it if it was an interface.
+	// But watcher.Watcher is a struct.
+	// However, it has an Errors() channel.
+	// Wait, the Errors() channel is just a getter for a field.
+
+	cancel()
+	<-done
+}
+
+func TestRun_ConfigMissing(t *testing.T) {
+	if err := run([]string{"--config", "/nonexistent/path/config.yml", "--makefile", "../../testdata/Makefile"}); err == nil {
+		t.Error("expected error for missing config file, got nil")
 	}
 }

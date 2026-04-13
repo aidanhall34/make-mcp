@@ -362,8 +362,8 @@ func TestBuildTemplateData_RealMetrics(t *testing.T) {
 	}
 
 	total := len(data.Counters) + len(data.Histograms) + len(data.Gauges)
-	if total != 12 {
-		t.Errorf("total metrics = %d, want 12 (counters=%d histograms=%d gauges=%d)",
+	if total != 27 {
+		t.Errorf("total metrics = %d, want 27 (counters=%d histograms=%d gauges=%d)",
 			total, len(data.Counters), len(data.Histograms), len(data.Gauges))
 	}
 

@@ -42,6 +42,46 @@ override with `OTEL_EXPORTER_PROMETHEUS_HOST` and `OTEL_EXPORTER_PROMETHEUS_PORT
 | Unit | — |
 | Labels | `destructive`, `idempotent`, `open_world`, `read_only`, `risk`, `status`, `streaming`, `tool` |
 
+### `make_mcp_auth_attempts_total`
+
+| Property | Value |
+|---|---|
+| Description | Total number of OAuth token validation attempts. |
+| Unit | — |
+| Labels | `status` |
+
+### `make_mcp_resources_listed_total`
+
+| Property | Value |
+|---|---|
+| Description | Total number of resources returned across all resources/list requests. |
+| Unit | — |
+| Labels | `status` |
+
+### `make_mcp_resources_read_total`
+
+| Property | Value |
+|---|---|
+| Description | Total number of resources/read requests. |
+| Unit | — |
+| Labels | `status` |
+
+### `make_mcp_files_watched_total`
+
+| Property | Value |
+|---|---|
+| Description | Total number of files ever registered as MCP resources (including removed). |
+| Unit | — |
+| Labels | _(none)_ |
+
+### `make_mcp_resource_subscriptions_total`
+
+| Property | Value |
+|---|---|
+| Description | Total number of resource subscription events (subscribe/unsubscribe). |
+| Unit | — |
+| Labels | `action` |
+
 ## Histograms
 
 ### `make_mcp_tools_list_request_latency_seconds`
@@ -92,6 +132,70 @@ override with `OTEL_EXPORTER_PROMETHEUS_HOST` and `OTEL_EXPORTER_PROMETHEUS_PORT
 | Unit | By |
 | Labels | `destructive`, `idempotent`, `open_world`, `read_only`, `risk`, `status`, `streaming`, `tool` |
 
+### `make_mcp_auth_attempt_duration_seconds`
+
+| Property | Value |
+|---|---|
+| Description | Latency of OAuth token validation attempts. |
+| Unit | s |
+| Labels | `status` |
+
+### `make_mcp_resources_list_request_duration_seconds`
+
+| Property | Value |
+|---|---|
+| Description | Server-side latency of resources/list requests. |
+| Unit | s |
+| Labels | `status` |
+
+### `make_mcp_resources_list_file_count`
+
+| Property | Value |
+|---|---|
+| Description | Number of resources returned per resources/list request. |
+| Unit | — |
+| Labels | `status` |
+
+### `make_mcp_resources_read_duration_seconds`
+
+| Property | Value |
+|---|---|
+| Description | Server-side latency of resources/read requests. |
+| Unit | s |
+| Labels | `status` |
+
+### `make_mcp_resources_read_file_count`
+
+| Property | Value |
+|---|---|
+| Description | Number of file contents returned per resources/read response. |
+| Unit | — |
+| Labels | `status` |
+
+### `make_mcp_resources_read_bytes_in`
+
+| Property | Value |
+|---|---|
+| Description | Bytes received in resources/read requests (URI length). |
+| Unit | By |
+| Labels | `status` |
+
+### `make_mcp_resources_read_bytes_out`
+
+| Property | Value |
+|---|---|
+| Description | Bytes sent in resources/read responses (file content size). |
+| Unit | By |
+| Labels | `status` |
+
+### `make_mcp_resource_notification_duration_seconds`
+
+| Property | Value |
+|---|---|
+| Description | Latency of sending resource update notifications to subscribed clients. |
+| Unit | s |
+| Labels | `status` |
+
 ## Gauges
 
 ### `make_mcp_connected_clients`
@@ -109,6 +213,22 @@ override with `OTEL_EXPORTER_PROMETHEUS_HOST` and `OTEL_EXPORTER_PROMETHEUS_PORT
 | Description | Current number of registered MCP tools. |
 | Unit | — |
 | Labels | `destructive`, `idempotent`, `open_world`, `read_only`, `risk` |
+
+### `make_mcp_files_watched`
+
+| Property | Value |
+|---|---|
+| Description | Current number of files registered as MCP resources. |
+| Unit | — |
+| Labels | _(none)_ |
+
+### `make_mcp_resource_subscriptions_active`
+
+| Property | Value |
+|---|---|
+| Description | Current number of active resource subscriptions. |
+| Unit | — |
+| Labels | _(none)_ |
 
 ## Dashboards
 

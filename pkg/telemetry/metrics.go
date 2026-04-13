@@ -33,6 +33,33 @@ type Instruments struct {
 	ToolInvocationBytesOut         metric.Int64Histogram
 	ConnectedClients               metric.Int64UpDownCounter
 	ToolsRegistered                metric.Int64Gauge
+
+	// Auth instruments
+	AuthAttemptsTotal   metric.Int64Counter
+	AuthAttemptDuration metric.Float64Histogram
+
+	// Resource list instruments
+	ResourcesListedTotal         metric.Int64Counter
+	ResourcesListRequestDuration metric.Float64Histogram
+	ResourcesListFileCount       metric.Int64Histogram
+
+	// Resource read instruments
+	ResourcesReadTotal     metric.Int64Counter
+	ResourcesReadDuration  metric.Float64Histogram
+	ResourcesReadFileCount metric.Int64Histogram
+	ResourcesReadBytesIn   metric.Int64Histogram
+	ResourcesReadBytesOut  metric.Int64Histogram
+
+	// File watch instruments
+	FilesWatched      metric.Int64Gauge
+	FilesWatchedTotal metric.Int64Counter
+
+	// Subscription instruments
+	ResourceSubscriptionsTotal  metric.Int64Counter
+	ResourceSubscriptionsActive metric.Int64UpDownCounter
+
+	// Notification instruments
+	ResourceNotificationDuration metric.Float64Histogram
 }
 
 var (
@@ -112,10 +139,176 @@ func initMetrics() error {
 		return err
 	}
 
+	// Auth instruments
+	if m.AuthAttemptsTotal, err = meter.Int64Counter(
+		"make_mcp_auth_attempts_total",
+		metric.WithDescription("Total number of OAuth token validation attempts."),
+	); err != nil {
+		return err
+	}
+	if m.AuthAttemptDuration, err = meter.Float64Histogram(
+		"make_mcp_auth_attempt_duration_seconds",
+		metric.WithDescription("Latency of OAuth token validation attempts."),
+		metric.WithUnit("s"),
+	); err != nil {
+		return err
+	}
+
+	// Resource list instruments
+	if m.ResourcesListedTotal, err = meter.Int64Counter(
+		"make_mcp_resources_listed_total",
+		metric.WithDescription("Total number of resources returned across all resources/list requests."),
+	); err != nil {
+		return err
+	}
+	if m.ResourcesListRequestDuration, err = meter.Float64Histogram(
+		"make_mcp_resources_list_request_duration_seconds",
+		metric.WithDescription("Server-side latency of resources/list requests."),
+		metric.WithUnit("s"),
+	); err != nil {
+		return err
+	}
+	if m.ResourcesListFileCount, err = meter.Int64Histogram(
+		"make_mcp_resources_list_file_count",
+		metric.WithDescription("Number of resources returned per resources/list request."),
+	); err != nil {
+		return err
+	}
+
+	// Resource read instruments
+	if m.ResourcesReadTotal, err = meter.Int64Counter(
+		"make_mcp_resources_read_total",
+		metric.WithDescription("Total number of resources/read requests."),
+	); err != nil {
+		return err
+	}
+	if m.ResourcesReadDuration, err = meter.Float64Histogram(
+		"make_mcp_resources_read_duration_seconds",
+		metric.WithDescription("Server-side latency of resources/read requests."),
+		metric.WithUnit("s"),
+	); err != nil {
+		return err
+	}
+	if m.ResourcesReadFileCount, err = meter.Int64Histogram(
+		"make_mcp_resources_read_file_count",
+		metric.WithDescription("Number of file contents returned per resources/read response."),
+	); err != nil {
+		return err
+	}
+	if m.ResourcesReadBytesIn, err = meter.Int64Histogram(
+		"make_mcp_resources_read_bytes_in",
+		metric.WithDescription("Bytes received in resources/read requests (URI length)."),
+		metric.WithUnit("By"),
+	); err != nil {
+		return err
+	}
+	if m.ResourcesReadBytesOut, err = meter.Int64Histogram(
+		"make_mcp_resources_read_bytes_out",
+		metric.WithDescription("Bytes sent in resources/read responses (file content size)."),
+		metric.WithUnit("By"),
+	); err != nil {
+		return err
+	}
+
+	// File watch instruments
+	if m.FilesWatched, err = meter.Int64Gauge(
+		"make_mcp_files_watched",
+		metric.WithDescription("Current number of files registered as MCP resources."),
+	); err != nil {
+		return err
+	}
+	if m.FilesWatchedTotal, err = meter.Int64Counter(
+		"make_mcp_files_watched_total",
+		metric.WithDescription("Total number of files ever registered as MCP resources (including removed)."),
+	); err != nil {
+		return err
+	}
+
+	// Subscription instruments
+	if m.ResourceSubscriptionsTotal, err = meter.Int64Counter(
+		"make_mcp_resource_subscriptions_total",
+		metric.WithDescription("Total number of resource subscription events (subscribe/unsubscribe)."),
+	); err != nil {
+		return err
+	}
+	if m.ResourceSubscriptionsActive, err = meter.Int64UpDownCounter(
+		"make_mcp_resource_subscriptions_active",
+		metric.WithDescription("Current number of active resource subscriptions."),
+	); err != nil {
+		return err
+	}
+
+	// Notification instruments
+	if m.ResourceNotificationDuration, err = meter.Float64Histogram(
+		"make_mcp_resource_notification_duration_seconds",
+		metric.WithDescription("Latency of sending resource update notifications to subscribed clients."),
+		metric.WithUnit("s"),
+	); err != nil {
+		return err
+	}
+
 	metricsMu.Lock()
 	metrics = m
 	metricsMu.Unlock()
 	return nil
+}
+
+// RecordAuthAttempt records the outcome and latency of a Bearer token validation.
+func RecordAuthAttempt(ctx context.Context, status string, d time.Duration) {
+	m := Metrics()
+	attrs := metric.WithAttributes(attribute.String("status", status))
+	m.AuthAttemptsTotal.Add(ctx, 1, attrs)
+	m.AuthAttemptDuration.Record(ctx, d.Seconds(), attrs)
+}
+
+// RecordResourcesListRequest records a resources/list request with its latency
+// and the number of resources returned.
+func RecordResourcesListRequest(ctx context.Context, status string, d time.Duration, fileCount int64) {
+	m := Metrics()
+	attrs := metric.WithAttributes(attribute.String("status", status))
+	m.ResourcesListedTotal.Add(ctx, fileCount, attrs)
+	m.ResourcesListRequestDuration.Record(ctx, d.Seconds(), attrs)
+	m.ResourcesListFileCount.Record(ctx, fileCount, attrs)
+}
+
+// RecordResourcesRead records a resources/read request with its latency,
+// number of content items returned, and bytes transferred.
+func RecordResourcesRead(ctx context.Context, status string, d time.Duration, fileCount, bytesIn, bytesOut int64) {
+	m := Metrics()
+	attrs := metric.WithAttributes(attribute.String("status", status))
+	m.ResourcesReadTotal.Add(ctx, 1, attrs)
+	m.ResourcesReadDuration.Record(ctx, d.Seconds(), attrs)
+	m.ResourcesReadFileCount.Record(ctx, fileCount, attrs)
+	m.ResourcesReadBytesIn.Record(ctx, bytesIn, attrs)
+	m.ResourcesReadBytesOut.Record(ctx, bytesOut, attrs)
+}
+
+// RecordFilesWatched sets the current watched-file gauge and increments the
+// total counter. delta should be +1 when a file is added, -1 when removed.
+func RecordFilesWatched(ctx context.Context, delta int64) {
+	m := Metrics()
+	m.FilesWatched.Record(ctx, delta)
+	if delta > 0 {
+		m.FilesWatchedTotal.Add(ctx, delta)
+	}
+}
+
+// RecordResourceSubscription records a subscribe or unsubscribe event.
+// delta should be +1 for subscribe, -1 for unsubscribe.
+func RecordResourceSubscription(ctx context.Context, action string, delta int64) {
+	m := Metrics()
+	attrs := metric.WithAttributes(attribute.String("action", action))
+	m.ResourceSubscriptionsTotal.Add(ctx, 1, attrs)
+	m.ResourceSubscriptionsActive.Add(ctx, delta)
+}
+
+// RecordResourceNotification records the latency of sending a resource update
+// notification.
+func RecordResourceNotification(ctx context.Context, status string, d time.Duration) {
+	m := Metrics()
+	m.ResourceNotificationDuration.Record(ctx, d.Seconds(),
+		metric.WithAttributes(attribute.String("status", status)),
+	)
 }
 
 func RecordToolReload(ctx context.Context, file, status string) {

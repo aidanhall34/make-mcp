@@ -2,7 +2,12 @@ package transport
 
 import (
 	"context"
+	"crypto/rand"
+	"crypto/rsa"
+	"encoding/base64"
+	"encoding/json"
 	"errors"
+	"math/big"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -10,9 +15,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/aidanhall34/make-mcp/pkg/auth"
 	"github.com/aidanhall34/make-mcp/pkg/config"
 	"github.com/aidanhall34/make-mcp/pkg/parser"
 	rootserver "github.com/aidanhall34/make-mcp/pkg/server"
+	"github.com/golang-jwt/jwt/v5"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/propagation"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
@@ -161,6 +168,190 @@ func TestCORSMiddleware_PreflightOptions(t *testing.T) {
 		if !strings.Contains(allowedHeaders, want) {
 			t.Errorf("Access-Control-Allow-Headers missing %q, got %q", want, allowedHeaders)
 		}
+	}
+}
+
+// --- Bearer middleware tests ---
+
+// testJWKSServer starts an httptest server serving a JWKS for key with kid.
+func testJWKSServer(t *testing.T, kid string, key *rsa.PrivateKey) *httptest.Server {
+	t.Helper()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		nB64 := base64.RawURLEncoding.EncodeToString(key.PublicKey.N.Bytes())
+		eB64 := base64.RawURLEncoding.EncodeToString(big.NewInt(int64(key.PublicKey.E)).Bytes())
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"keys": []map[string]any{
+				{"kty": "RSA", "kid": kid, "n": nB64, "e": eB64},
+			},
+		})
+	}))
+	t.Cleanup(srv.Close)
+	return srv
+}
+
+// testToken signs a JWT with key for the given claims.
+func testToken(t *testing.T, key *rsa.PrivateKey, kid string, claims jwt.MapClaims) string {
+	t.Helper()
+	tok := jwt.NewWithClaims(jwt.SigningMethodRS256, claims)
+	tok.Header["kid"] = kid
+	raw, err := tok.SignedString(key)
+	if err != nil {
+		t.Fatalf("sign token: %v", err)
+	}
+	return raw
+}
+
+func TestBearerMiddleware_MissingToken_Returns401(t *testing.T) {
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatal(err)
+	}
+	jwksSrv := testJWKSServer(t, "k1", key)
+	v := auth.New("https://issuer.example.com", "make-mcp", jwksSrv.URL, &http.Client{})
+
+	hs := &HTTPServer{validator: v}
+	inner := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+	handler := bearerMiddleware(hs, inner)
+
+	req := httptest.NewRequest(http.MethodPost, "/mcp", nil)
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusUnauthorized {
+		t.Errorf("status = %d, want 401", rr.Code)
+	}
+}
+
+func TestBearerMiddleware_InvalidToken_Returns401(t *testing.T) {
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatal(err)
+	}
+	jwksSrv := testJWKSServer(t, "k1", key)
+	v := auth.New("https://issuer.example.com", "make-mcp", jwksSrv.URL, &http.Client{})
+
+	hs := &HTTPServer{validator: v}
+	inner := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+	handler := bearerMiddleware(hs, inner)
+
+	req := httptest.NewRequest(http.MethodPost, "/mcp", nil)
+	req.Header.Set("Authorization", "Bearer not.a.valid.token")
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusUnauthorized {
+		t.Errorf("status = %d, want 401", rr.Code)
+	}
+}
+
+func TestBearerMiddleware_ValidToken_PassesThrough(t *testing.T) {
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatal(err)
+	}
+	kid := "k1"
+	jwksSrv := testJWKSServer(t, kid, key)
+	v := auth.New("https://issuer.example.com", "make-mcp", jwksSrv.URL, &http.Client{})
+
+	hs := &HTTPServer{validator: v}
+
+	var calledInner bool
+	inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calledInner = true
+		w.WriteHeader(http.StatusNoContent)
+	})
+	handler := bearerMiddleware(hs, inner)
+
+	token := testToken(t, key, kid, jwt.MapClaims{
+		"iss": "https://issuer.example.com",
+		"aud": jwt.ClaimStrings{"make-mcp"},
+		"exp": time.Now().Add(time.Hour).Unix(),
+		"sub": "user-1",
+	})
+	req := httptest.NewRequest(http.MethodPost, "/mcp", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusNoContent {
+		t.Errorf("status = %d, want 204", rr.Code)
+	}
+	if !calledInner {
+		t.Error("inner handler was not called with valid token")
+	}
+}
+
+func TestBearerMiddleware_NoValidator_PassesThrough(t *testing.T) {
+	hs := &HTTPServer{validator: nil}
+	var called bool
+	inner := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		called = true
+		w.WriteHeader(http.StatusOK)
+	})
+	handler := bearerMiddleware(hs, inner)
+
+	req := httptest.NewRequest(http.MethodPost, "/mcp", nil)
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+
+	if !called {
+		t.Error("inner handler not called when OAuth disabled")
+	}
+}
+
+func TestOAuthMetadata_ReturnsJSON(t *testing.T) {
+	hs := NewHTTPServer(
+		newToolServer(t, []parser.Recipe{validRecipe()}),
+		"127.0.0.1:0",
+		WithOAuthIssuer("https://auth.example.com/realms/make-mcp"),
+	)
+
+	req := httptest.NewRequest(http.MethodGet, "/.well-known/oauth-protected-resource", nil)
+	req.Host = "localhost:9378"
+	rr := httptest.NewRecorder()
+	hs.server.Handler.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rr.Code)
+	}
+	var doc map[string]any
+	if err := json.NewDecoder(rr.Body).Decode(&doc); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if _, ok := doc["resource"]; !ok {
+		t.Error("response missing 'resource' field")
+	}
+	if _, ok := doc["authorization_servers"]; !ok {
+		t.Error("response missing 'authorization_servers' field")
+	}
+	if _, ok := doc["bearer_methods_supported"]; !ok {
+		t.Error("response missing 'bearer_methods_supported' field")
+	}
+}
+
+func TestOAuthMetadata_NotRegisteredWithoutIssuer(t *testing.T) {
+	hs := NewHTTPServer(newToolServer(t, []parser.Recipe{validRecipe()}), "127.0.0.1:0")
+	req := httptest.NewRequest(http.MethodGet, "/.well-known/oauth-protected-resource", nil)
+	rr := httptest.NewRecorder()
+	hs.server.Handler.ServeHTTP(rr, req)
+	if rr.Code == http.StatusOK {
+		t.Error("oauth metadata should not be registered without issuer or validator")
+	}
+}
+
+func TestWithTLS_SetsCertAndKey(t *testing.T) {
+	hs := &HTTPServer{}
+	WithTLS(config.TLSConfig{Cert: "server.crt", Key: "server.key"})(hs)
+	if hs.tlsCert != "server.crt" {
+		t.Errorf("tlsCert = %q, want server.crt", hs.tlsCert)
+	}
+	if hs.tlsKey != "server.key" {
+		t.Errorf("tlsKey = %q, want server.key", hs.tlsKey)
 	}
 }
 

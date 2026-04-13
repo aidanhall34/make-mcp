@@ -4,6 +4,7 @@ go 1.25.1
 
 require (
 	github.com/fsnotify/fsnotify v1.9.0
+	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/mark3labs/mcp-go v0.47.1
 	github.com/prometheus/client_golang v1.23.2
 	go.opentelemetry.io/otel v1.43.0

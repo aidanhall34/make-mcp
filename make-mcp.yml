@@ -42,3 +42,35 @@ timeouts:
   low: 10m
   medium: 10m
   high: 10m
+
+# page_size: maximum number of tools or resources returned per page.
+# 0 (default) disables pagination.
+# page_size: 50
+
+# resources: expose files and directories as MCP resources.
+# Clients can read, list, and subscribe to change notifications.
+# resources:
+#   recursive: true          # default for directory traversal
+#   paths:
+#     - name: "config"       # used for OAuth group mapping
+#       description: "Configuration files"
+#       path:
+#         - "./config/*.yml"
+#         - "./docs/"
+#       recursive: false     # overrides top-level default
+
+# oauth: Bearer token authentication via an external OIDC provider.
+# Requires transport: http or both. TLS is mandatory when enabled.
+# oauth:
+#   enabled: false
+#   issuer: "https://localhost:8443/realms/make-mcp"
+#   audience: "make-mcp"
+#   jwks_uri: "https://localhost:8443/realms/make-mcp/protocol/openid-connect/certs"
+#   tls:
+#     cert: ./dev/certs/server.crt
+#     key:  ./dev/certs/server.key
+#     ca:   ./dev/certs/ca.crt   # custom CA for validating the JWKS endpoint
+#   groups:
+#     - name: "/admins"
+#       resources:
+#         - "config"             # grant /admins access to the "config" resource path

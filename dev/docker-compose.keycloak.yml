@@ -1,0 +1,27 @@
+services:
+  keycloak:
+    image: quay.io/keycloak/keycloak:${KEYCLOAK_VERSION}
+    command:
+      - start-dev
+      - --https-certificate-file=/certs/server.crt
+      - --https-certificate-key-file=/certs/server.key
+    environment:
+      KC_HOSTNAME: localhost
+      KC_HTTPS_PORT: "8443"
+      KC_HTTP_ENABLED: "false"
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+    ports:
+      - "8443:8443"
+    volumes:
+      - ./certs:/certs:ro
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >
+          curl -sf https://localhost:8443/realms/master/.well-known/openid-configuration
+          --cacert /certs/ca.crt || exit 1
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 40s
