@@ -12,7 +12,7 @@ include dev/makefiles/github.mk
 
 .PHONY: all
 # @ name: All actions
-# @ description: Runs all unit tests and builds all packages and containers. RUN ON EVERY CHANGE TO .go AND .py files
+# @ description: Runs all unit tests and builds all packages and containers.
 # @ risk: low
 # @ read-only: true
 # @ destructive: false
@@ -27,7 +27,7 @@ all: lint test build build-test-containers
 
 .PHONY: test
 # @ name: All tests
-# @ description: Runs all Go unit and benchmark tests and Python CI helper tests. Each Go package enforces its own coverage threshold via TestMain and emits per-file JSON coverage to stderr.
+# @ description: Runs all Go and Python unit tests. RUN ON FILE EVERY CHANGE
 # @ risk: low
 # @ read-only: true
 # @ destructive: false
@@ -40,7 +40,7 @@ test: unit-tests pytest
 
 .PHONY: lint
 # @ name: Lint
-# @ description: Runs repository linting and validation checks required by CI. RUN AFTER ALL FILE CHANGES
+# @ description: Runs repository linting and validation checks. RUN AFTER ALL FILE CHANGES
 # @ risk: low
 # @ read-only: true
 # @ destructive: false

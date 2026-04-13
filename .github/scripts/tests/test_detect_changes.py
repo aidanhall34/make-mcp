@@ -32,9 +32,11 @@ IGNORE_FILE = SCRIPTS_DIR / "ignore-patterns.txt"
 # ---------------------------------------------------------------------------
 
 _SHARED_IGNORE = load_ignore_file(str(IGNORE_FILE))
-CI_IGNORE = ["wiki/*", *_SHARED_IGNORE]
+# README.md is not in the shared ignore file; CI suppresses it via --ignore,
+# while release treats it as a wiki-sync trigger via a dedicated rule.
+CI_IGNORE = ["wiki/*", "README.md", *_SHARED_IGNORE]
 RELEASE_IGNORE = _SHARED_IGNORE
-RELEASE_RULES = [("run-wiki-sync", "wiki/*")]
+RELEASE_RULES = [("run-wiki-sync", "README.md"), ("run-wiki-sync", "wiki/*")]
 
 
 # ---------------------------------------------------------------------------
@@ -78,7 +80,7 @@ def two_commit_repo(tmp_path):
 class TestLoadIgnoreFile:
     def test_loads_real_ignore_file(self):
         patterns = load_ignore_file(str(IGNORE_FILE))
-        assert "README.md" in patterns
+        assert "AGENTS.md" in patterns
         assert "pyproject.toml" in patterns
         assert "uv.lock" in patterns
 
@@ -304,7 +306,7 @@ class TestMainStdin:
         assert "run-code-ci=true" in out
 
     def test_stdin_all_ignored_outputs_false(self, monkeypatch, capsys):
-        monkeypatch.setattr("sys.stdin", StringIO("README.md\n"))
+        monkeypatch.setattr("sys.stdin", StringIO("AGENTS.md\n"))
         main([
             "--ignore-file", str(IGNORE_FILE),
             "--default", "run-code-ci",
@@ -427,9 +429,10 @@ class TestReleaseConfig:
         assert out["run-wiki-sync"] is False
         assert out["run-code-release"] is True
 
-    def test_ignored_file_triggers_neither(self):
+    def test_readme_triggers_wiki_sync_only(self):
         out = self._run(["README.md"])
-        assert out == {"run-wiki-sync": False, "run-code-release": False}
+        assert out["run-wiki-sync"] is True
+        assert out["run-code-release"] is False
 
     def test_wiki_and_code_both_trigger(self):
         out = self._run(["wiki/Home.md", "cmd/main.go"])
@@ -444,7 +447,6 @@ class TestReleaseConfig:
     @pytest.mark.parametrize(
         "path",
         [
-            "README.md",
             "AGENTS.md",
             "CLAUDE.md",
             "pyproject.toml",
