@@ -1,3 +1,8 @@
+## <small>1.0.1 (2026-04-13)</small>
+
+* fix(ci): add missing UV dep to sem release action (#14) ([3f7aa65](https://github.com/aidanhall34/make-mcp/commit/3f7aa65)), closes [#14](https://github.com/aidanhall34/make-mcp/issues/14)
+* refactor(ci): refactor CI and improve docs ([757c2ee](https://github.com/aidanhall34/make-mcp/commit/757c2ee))
+
 ## 1.0.0 (2026-04-12)
 
 * feat: Added markdown linting, improved docs, fix local OTEL for codex ([5069883](https://github.com/aidanhall34/make-mcp/commit/5069883))
