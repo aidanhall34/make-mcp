@@ -1,5 +1,30 @@
 SHELL=/usr/bin/env bash
 
+DIST_DIR ?= ./dist
+ARCH ?= amd64
+GITHUB_OWNER = aidanhall34
+IMAGE_NAME = ghcr.io/$(GITHUB_OWNER)/make-mcp
+TEST_IMAGE_NAME = $(IMAGE_NAME)-test
+OTEL_TEST_ENDPOINT ?= http://localhost:4317
+IMAGE_TAG ?= $(if $(_GIT_TAG),$(_GIT_TAG),$(_GIT_SHA))
+
+.PHONY: pytest
+# @ name: Python tests
+# @ description: Runs pytest on the Python CI helper scripts in .github/scripts/tests/ with line-level coverage reporting. Fails if coverage of .github/scripts/detect_changes.py falls below 90%.
+# @ risk: low
+# @ read-only: true
+# @ destructive: false
+# @ idempotent: true
+# @ open-world: false
+# @ param: none
+# @ output: pytest results, coverage report, and pass/fail summary
+# @ output-type: text/plain
+pytest:
+	@mkdir -p "$(_LOG_DIR)"
+	@{ "$(VENV)/bin/pytest" .github/scripts/tests/ --cov ; } \
+		$(call _tee-log,pytest) ; \
+	exit_code=$$? ; wait ; exit $$exit_code
+
 .PHONY: build-binaries
 # @ name: Build Binaries
 # @ description: Cross-compiles mcp-server and validate for the target Linux architecture and writes them to ./dist. Used by CI to produce per-arch artifacts before packaging.

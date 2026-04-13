@@ -45,6 +45,7 @@
       "parameters": {
         "strict_required_status_checks_policy": true,
         "required_status_checks": [
+          {"context": "detect-changes / detect-changes"},
           {"context": "lint / lint"},
           {"context": "scan / scan (TruffleHog)"},
           {"context": "scan / scan (Trivy)"},

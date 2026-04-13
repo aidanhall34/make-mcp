@@ -1,5 +1,13 @@
 SHELL=/usr/bin/env bash
 
+ACT_IMAGE ?= ghcr.io/catthehacker/ubuntu:act-latest
+ACT_WORKFLOW ?= ./.github/workflows/ci.yml
+ACT_EVENT ?= push
+ACT_JOB ?=
+ACT_SECRET_FILE ?= ./.act.secrets
+ACT_OTEL_ENDPOINT ?= http://host.docker.internal:4317
+ACT_CONCURRENT_JOBS ?= 2
+
 # @ name: Upload Repository Rulesets
 # @ description: Applies repository rulesets to GitHub for each JSON file in .github/rulesets/. Each file must be named after the ruleset it defines (e.g. main.json). Creates the ruleset if it does not exist, or updates it by name if it does.
 # @ risk: high

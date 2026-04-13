@@ -1,5 +1,8 @@
 SHELL=/usr/bin/env bash
 
+TRUFFLEHOG_VERSION = 3.94.3
+TRIVY_VERSION = 0.69.3
+
 # @ name: Scan Secrets
 # @ description: Scans the repository for secrets using TruffleHog in a Docker container.
 # @ risk: low

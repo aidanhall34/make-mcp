@@ -28,6 +28,20 @@ generate-wiki-sidebar:
 generate-wiki-home:
 	@./scripts/gen-wiki-home.sh
 
+.PHONY: gen-ci-doc
+# @ name: Generate CI Documentation
+# @ description: Parses .github/workflows/*.yml and .github/rulesets/main.json and generates wiki/GitHub CI.md from wiki/tmpl/GitHub CI.md.tmpl. Fails if the committed file was out of date.
+# @ risk: low
+# @ read-only: false
+# @ destructive: false
+# @ idempotent: true
+# @ open-world: false
+# @ param: none
+# @ output: Updated wiki/GitHub CI.md or a success message
+# @ output-type: text/plain
+gen-ci-doc:
+	@go run ./cmd/gen-ci-doc
+
 .PHONY: gen-metrics-doc
 # @ name: Generate Metrics Documentation
 # @ description: Parses pkg/telemetry/metrics.go via the Go AST and generates wiki/Metrics.md from docs/metrics.md.tmpl. Fails if the committed file was out of date.

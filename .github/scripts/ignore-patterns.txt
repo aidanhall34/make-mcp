@@ -1,0 +1,20 @@
+# Patterns in this file are ignored by detect_changes.py in every workflow.
+# One fnmatch glob per line. Blank lines and lines starting with # are skipped.
+AGENTS.md
+CLAUDE.md
+SECURITY.md
+CONTRIBUTING.md
+LICENSE
+.mcp.json
+.gemini/*
+.vscode/*
+.claude/*
+.codex/*
+.markdownlint*
+.yamllint*
+checkmake.ini
+.gitignore
+.dockerignore
+.nvmrc
+pyproject.toml
+uv.lock

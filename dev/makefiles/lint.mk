@@ -1,5 +1,7 @@
 SHELL=/usr/bin/env bash
 
+HADOLINT_VERSION = 2.12.0
+
 # @ name: Lint Tidy
 # @ description: Verifies that go.mod and go.sum are synchronized (fails if changes are needed).
 # @ risk: low

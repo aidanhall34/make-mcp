@@ -1,5 +1,9 @@
 SHELL=/usr/bin/env bash
 
+_PID_DIR             := $(CURDIR)/dev/run
+_MCP_PID_FILE        := $(_PID_DIR)/make-mcp.pid
+_LGTM_LOGS_PID_FILE  := $(_PID_DIR)/lgtm-logs.pid
+
 .PHONY: otelcol-validate
 # @ name: Validate OpenTelemetry collector configuration
 # @ description: Validate changes to the Dev Opentelemetry collector configurations
@@ -51,6 +55,8 @@ prometheus-validate:
 # @ output: Confirmation that the volume has been created
 # @ output-type: text/plain
 dev-volumes:
+	mkdir -p "$(_LOG_DIR)" "$(_PID_DIR)"
+	chmod 777 "$(_LOG_DIR)" "$(_PID_DIR)"
 	docker volume create make-mcp-lgtm-prometheus-data
 	docker volume create make-mcp-lgtm-loki-data
 	docker volume create make-mcp-lgtm-tempo-data
