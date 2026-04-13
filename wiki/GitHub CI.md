@@ -1,69 +1,32 @@
 # GitHub CI and Release
 
-The pipeline is managed by two main orchestrator workflows that call reusable workflows
+The pipeline is managed by two orchestrator workflows that call reusable workflows
 stored in `.github/workflows/`. Reusable workflows are prefixed with `_` and have no
 push trigger of their own — they are invoked via `workflow_call`.
-
-## Workflow files
-
-| File | Trigger | Purpose |
-|---|---|---|
-| `ci.yml` | push | **Orchestrator:** Runs the full pre-merge suite (lint, scan, test, build, smoke, integration) |
-| `release.yml` | push to `main` | **Orchestrator:** Full release lifecycle — semantic-release, publish, SBOM, verify |
-| `wiki.yml` | push to `main` (`wiki/**`) | Syncs `wiki/` to the GitHub wiki git repository |
-| `_lint.yml` | workflow_call | Go formatting, vet, markdownlint, mod tidy |
-| `_scan.yml` | workflow_call | TruffleHog secret scan + Trivy vulnerability scan on source |
-| `_test.yml` | workflow_call | Unit tests with `-race` on amd64 |
-| `_bench.yml` | workflow_call | Benchmark suite on amd64 |
-| `_build-image.yml` | workflow_call | Build container image tar + Trivy vuln scan |
-| `_build-release.yml` | workflow_call | Build binary release archives |
-| `_smoke-tests.yml` | workflow_call | Start server + validator, verify they respond |
-| `_install-tests.yml` | workflow_call | `go install` both binaries, run them without error |
-| `_compatibility-tests.yml` | workflow_call | k6 MCP protocol tests against binary and container |
 
 ---
 
 ## Pre-merge pipeline (ci.yml)
 
-Every push to any branch triggers `ci.yml`. It coordinates parallel execution to ensure
-that fast native builds (amd64) are not blocked by slower emulated builds (arm64).
-
-### Execution Graph
-
-```
-push
- ├── lint (_lint.yml)
- ├── scan (_scan.yml)
- ├── test (_test.yml)
- ├── bench (_bench.yml)
- ├── install-tests (_install-tests.yml)
- │
- ├── build-images-amd64 ───┬── smoke-tests-amd64
- └── build-releases-amd64 ─┘── compatibility-tests-amd64
- │
- ├── build-images-arm64 ───┬── smoke-tests-arm64
- └── build-releases-arm64 ─┘── compatibility-tests-arm64
-```
+Every push to any non-`main` branch triggers `ci.yml`. A `detect-changes` job first
+classifies the changed files; code-CI jobs are skipped when only documentation or
+configuration files change.
 
 ### build-images (_build-image.yml)
 
-Builds the container image tar via `make build-container-tar`. Immediately after building,
-it runs a **Trivy vulnerability scan** on the tarball. If any `HIGH` or `CRITICAL`
-vulnerabilities are found, the job fails.
+Builds the container image tar via `make build-container-tar`. Immediately after
+building, it runs a **Trivy vulnerability scan** on the tarball. If any `HIGH` or
+`CRITICAL` vulnerabilities are found, the job fails.
 
-### smoke-tests (_smoke-tests.yml)
+### smoke-tests (_smoke-tests-binary.yml/_smoke-tests-container.yml)
 
-**Binary smoke test:**
+**Binary smoke test:** downloads the `binaries-<arch>` artifact and runs
+`make test-binary ARCH=<arch>` (HTTP mode, `/ready` poll).
 
-1. Download `binaries-<arch>` artifact.
-2. Run `make test-binary ARCH=<arch>` (HTTP mode, `/ready` poll).
+**Container smoke test:** downloads the `container-<arch>` artifact, loads it with
+`docker load`, then runs `make smoke-test-container ARCH=<arch>`.
 
-**Container smoke test:**
-
-1. Download `container-<arch>` artifact and `docker load` it.
-2. Run `make smoke-test-container ARCH=<arch>` (HTTP mode, `/ready` poll).
-
-### compatibility-tests (_compatibility-tests.yml)
+### compatibility-tests (_compatibility-tests-binary.yml/_compatibility-tests-container.yml)
 
 Runs the k6 MCP protocol test suite against both the binary and the container.
 
@@ -101,47 +64,19 @@ After release builds complete, this job:
 
 Notifications are optimized to reduce noise:
 
-- **CI Jobs:** Only send a Discord notification on **failure**.
-- **Release Jobs:** Only send on **failure**, except for `semantic-release`, which
+- **CI jobs:** Only send a Discord notification on **failure**.
+- **Release jobs:** Only send on **failure**, except for `semantic-release`, which
   notifies on failure OR when a new version is successfully published.
 
 Embeds include job name, status, duration, and a link to the commit/PR.
 
 ---
 
-## Branch protection (Repository Ruleset)
-
-`main` is protected by a GitHub Repository Ruleset stored in `.github/rulesets/main.json`.
-Apply or update it with:
-
-```sh
-make upload-ruleset
-```
-
-The ruleset enforces:
-
-| Rule | Value |
-|---|---|
-| Deletion | Blocked |
-| Force push | Blocked |
-| Required linear history | Yes |
-| Required approving reviews | 1 |
-| Dismiss stale reviews on push | Yes |
-| Require last-push approval | Yes |
-| Required conversation resolution | Yes |
-| Required status checks (strict) | All 18 CI jobs |
-
-**Bypass:** the repository `Admin` role bypasses all rules unconditionally. On this repo that is `aidanhall34` only. All other users and apps (including `github-actions`) are subject to the full ruleset.
-
-> **Note:** The rulesets API does not support per-workflow bypass. The `github-actions` app is intentionally excluded from the bypass list — automated pushes (e.g. semantic-release CHANGELOG commits) must go through a PR or use a fine-grained PAT with `contents: write` scope stored as a repository secret.
-
----
-
 ## Wiki publishing
 
-Wiki source lives in `wiki/` inside the main repository. On every push to `main` that touches `wiki/**`, the `wiki.yml` workflow clones the GitHub wiki git repository and syncs the Markdown files.
-
-> **First-time setup:** GitHub does not create the wiki git repository until at least one page exists. Before the workflow can push, navigate to the repository's **Wiki** tab and create a placeholder page, then the workflow will take over on the next push.
+Wiki source lives in `wiki/` inside the main repository. On every push to `main`
+(or when a release is published), the `publish-wiki` job in `release.yml` clones the
+GitHub wiki git repository and syncs the Markdown files.
 
 ---
 
@@ -153,5 +88,215 @@ make act-run
 
 - Uses the `push` event to trigger the `ci.yml` coordinator.
 - Secrets are read from `.act.secrets`.
-- To run a specific reusable workflow directly (if needed):
+- To run a specific reusable workflow directly:
   `make act-run ACT_WORKFLOW=.github/workflows/_lint.yml`
+
+---
+
+<!-- The sections below are auto-generated. Run `make gen-ci-doc` to regenerate. -->
+
+## Workflow files
+
+> Auto-generated from `.github/workflows/*.yml`. Run `make gen-ci-doc` to update.
+
+| File | Trigger | Purpose |
+|---|---|---|
+| `ci.yml` | push (branches-ignore: main) | CI |
+| `release.yml` | push (branches: main) | release |
+| `_bench.yml` | workflow_call | _bench |
+| `_build-image.yml` | workflow_call | _build-image |
+| `_build-release.yml` | workflow_call | _build-release |
+| `_compatibility-tests-binary.yml` | workflow_call | _compatibility-tests-binary |
+| `_compatibility-tests-container.yml` | workflow_call | _compatibility-tests-container |
+| `_install-tests.yml` | workflow_call | _install-tests |
+| `_lint.yml` | workflow_call | _lint |
+| `_sbom-and-scan.yml` | workflow_call | _sbom-and-scan |
+| `_scan.yml` | workflow_call | _scan |
+| `_smoke-tests-binary.yml` | workflow_call | _smoke-tests-binary |
+| `_smoke-tests-container.yml` | workflow_call | _smoke-tests-container |
+| `_test.yml` | workflow_call | _test |
+
+---
+
+## Execution graph — Pre-merge pipeline (ci.yml)
+
+> Auto-generated from job `needs:` dependencies in `ci.yml`. Run `make gen-ci-doc` to update.
+
+```mermaid
+graph TD
+    detect_changes["detect-changes"]
+    lint["lint"]
+    scan["scan"]
+    test["test"]
+    bench["bench"]
+    build_images_amd64["build-images-amd64"]
+    build_images_arm64["build-images-arm64"]
+    build_releases_amd64["build-releases-amd64"]
+    build_releases_arm64["build-releases-arm64"]
+    smoke_tests_binary_amd64["smoke-tests-binary-amd64"]
+    smoke_tests_container_amd64["smoke-tests-container-amd64"]
+    smoke_tests_binary_arm64["smoke-tests-binary-arm64"]
+    smoke_tests_container_arm64["smoke-tests-container-arm64"]
+    install_tests["install-tests"]
+    compatibility_tests_binary_amd64["compatibility-tests-binary-amd64"]
+    compatibility_tests_container_amd64["compatibility-tests-container-amd64"]
+    compatibility_tests_binary_arm64["compatibility-tests-binary-arm64"]
+    compatibility_tests_container_arm64["compatibility-tests-container-arm64"]
+    detect_changes --> lint
+    detect_changes --> scan
+    detect_changes --> test
+    detect_changes --> bench
+    detect_changes --> build_images_amd64
+    detect_changes --> build_images_arm64
+    detect_changes --> build_releases_amd64
+    detect_changes --> build_releases_arm64
+    detect_changes --> smoke_tests_binary_amd64
+    build_releases_amd64 --> smoke_tests_binary_amd64
+    detect_changes --> smoke_tests_container_amd64
+    build_images_amd64 --> smoke_tests_container_amd64
+    detect_changes --> smoke_tests_binary_arm64
+    build_releases_arm64 --> smoke_tests_binary_arm64
+    detect_changes --> smoke_tests_container_arm64
+    build_images_arm64 --> smoke_tests_container_arm64
+    detect_changes --> install_tests
+    detect_changes --> compatibility_tests_binary_amd64
+    build_releases_amd64 --> compatibility_tests_binary_amd64
+    detect_changes --> compatibility_tests_container_amd64
+    build_images_amd64 --> compatibility_tests_container_amd64
+    detect_changes --> compatibility_tests_binary_arm64
+    build_releases_arm64 --> compatibility_tests_binary_arm64
+    detect_changes --> compatibility_tests_container_arm64
+    build_images_arm64 --> compatibility_tests_container_arm64
+```
+
+---
+
+## Execution graph — Release pipeline (release.yml)
+
+> Auto-generated from job `needs:` dependencies in `release.yml`. Run `make gen-ci-doc` to update.
+
+```mermaid
+graph TD
+    detect_changes["detect-changes"]
+    semantic_release["semantic-release"]
+    build_image_amd64["build-image-amd64"]
+    build_image_arm64["build-image-arm64"]
+    build_release_amd64["build-release-amd64"]
+    build_release_arm64["build-release-arm64"]
+    sbom_and_scan["sbom-and-scan"]
+    smoke_tests_binary_amd64["smoke-tests-binary-amd64"]
+    smoke_tests_container_amd64["smoke-tests-container-amd64"]
+    smoke_tests_binary_arm64["smoke-tests-binary-arm64"]
+    smoke_tests_container_arm64["smoke-tests-container-arm64"]
+    compatibility_tests_binary_amd64["compatibility-tests-binary-amd64"]
+    compatibility_tests_container_amd64["compatibility-tests-container-amd64"]
+    compatibility_tests_binary_arm64["compatibility-tests-binary-arm64"]
+    compatibility_tests_container_arm64["compatibility-tests-container-arm64"]
+    release_binaries["release-binaries"]
+    release_containers["release-containers"]
+    pull_test_containers["pull-test-containers"]
+    install_test_releases["install-test-releases"]
+    publish_wiki["publish-wiki"]
+    notify_release_success["notify-release-success"]
+    detect_changes --> semantic_release
+    semantic_release --> build_image_amd64
+    semantic_release --> build_image_arm64
+    semantic_release --> build_release_amd64
+    semantic_release --> build_release_arm64
+    semantic_release --> sbom_and_scan
+    build_image_amd64 --> sbom_and_scan
+    build_image_arm64 --> sbom_and_scan
+    build_release_amd64 --> sbom_and_scan
+    build_release_arm64 --> sbom_and_scan
+    semantic_release --> smoke_tests_binary_amd64
+    build_release_amd64 --> smoke_tests_binary_amd64
+    semantic_release --> smoke_tests_container_amd64
+    build_image_amd64 --> smoke_tests_container_amd64
+    semantic_release --> smoke_tests_binary_arm64
+    build_release_arm64 --> smoke_tests_binary_arm64
+    semantic_release --> smoke_tests_container_arm64
+    build_image_arm64 --> smoke_tests_container_arm64
+    semantic_release --> compatibility_tests_binary_amd64
+    build_release_amd64 --> compatibility_tests_binary_amd64
+    semantic_release --> compatibility_tests_container_amd64
+    build_image_amd64 --> compatibility_tests_container_amd64
+    semantic_release --> compatibility_tests_binary_arm64
+    build_release_arm64 --> compatibility_tests_binary_arm64
+    semantic_release --> compatibility_tests_container_arm64
+    build_image_arm64 --> compatibility_tests_container_arm64
+    semantic_release --> release_binaries
+    sbom_and_scan --> release_binaries
+    smoke_tests_binary_amd64 --> release_binaries
+    smoke_tests_container_amd64 --> release_binaries
+    smoke_tests_binary_arm64 --> release_binaries
+    smoke_tests_container_arm64 --> release_binaries
+    compatibility_tests_binary_amd64 --> release_binaries
+    compatibility_tests_container_amd64 --> release_binaries
+    compatibility_tests_binary_arm64 --> release_binaries
+    compatibility_tests_container_arm64 --> release_binaries
+    semantic_release --> release_containers
+    sbom_and_scan --> release_containers
+    smoke_tests_binary_amd64 --> release_containers
+    smoke_tests_container_amd64 --> release_containers
+    smoke_tests_binary_arm64 --> release_containers
+    smoke_tests_container_arm64 --> release_containers
+    compatibility_tests_binary_amd64 --> release_containers
+    compatibility_tests_container_amd64 --> release_containers
+    compatibility_tests_binary_arm64 --> release_containers
+    compatibility_tests_container_arm64 --> release_containers
+    semantic_release --> pull_test_containers
+    release_containers --> pull_test_containers
+    semantic_release --> install_test_releases
+    release_binaries --> install_test_releases
+    detect_changes --> publish_wiki
+    semantic_release --> publish_wiki
+    semantic_release --> notify_release_success
+    pull_test_containers --> notify_release_success
+    install_test_releases --> notify_release_success
+    publish_wiki --> notify_release_success
+```
+
+---
+
+## Branch protection
+
+> Auto-generated from `.github/rulesets/main.json`. Run `make gen-ci-doc` to update.
+
+`main` is protected by a GitHub Repository Ruleset stored in `.github/rulesets/main.json`.
+Apply or update it with:
+
+```sh
+make upload-ruleset
+```
+
+| Rule | Setting |
+|---|---|
+| Deletion | Blocked |
+| Force push | Blocked |
+| Required linear history | Yes |
+| Required approving reviews | 1 |
+| Dismiss stale reviews on push | Yes |
+| Require last-push approval | Yes |
+| Required conversation resolution | Yes |
+
+### Required status checks (19 checks, strict)
+
+- `detect-changes / detect-changes`
+- `lint / lint`
+- `scan / scan (TruffleHog)`
+- `scan / scan (Trivy)`
+- `test / test`
+- `bench / bench`
+- `build-images-amd64 / build-images (amd64)`
+- `build-images-arm64 / build-images (arm64)`
+- `build-releases-amd64 / build-releases (amd64)`
+- `build-releases-arm64 / build-releases (arm64)`
+- `smoke-tests-binary-amd64 / smoke-tests (binary-amd64)`
+- `smoke-tests-container-amd64 / smoke-tests (container-amd64)`
+- `smoke-tests-binary-arm64 / smoke-tests (binary-arm64)`
+- `smoke-tests-container-arm64 / smoke-tests (container-arm64)`
+- `install-tests / install-tests`
+- `compatibility-tests-binary-amd64 / compatibility-tests (binary-amd64)`
+- `compatibility-tests-container-amd64 / compatibility-tests (container-amd64)`
+- `compatibility-tests-binary-arm64 / compatibility-tests (binary-arm64)`
+- `compatibility-tests-container-arm64 / compatibility-tests (container-arm64)`

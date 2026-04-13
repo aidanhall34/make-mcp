@@ -8,3 +8,5 @@ GEMINI.md
 coverage.out
 .act.secrets
 .cache
+.coverage
+__pycache__

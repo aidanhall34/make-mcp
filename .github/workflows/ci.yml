@@ -10,27 +10,57 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  detect-changes:
+    name: detect-changes
+    runs-on: ubuntu-latest
+    outputs:
+      run-code-ci: ${{ steps.filter.outputs.run-code-ci }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect changes requiring code CI
+        id: filter
+        run: |
+          python3 .github/scripts/detect_changes.py \
+            --git-base 'origin/main' \
+            --ignore-file '.github/scripts/ignore-patterns.txt' \
+            --ignore 'wiki/*' \
+            --default 'run-code-ci'
+
   lint:
+    needs: [detect-changes]
     uses: ./.github/workflows/_lint.yml
     secrets:
       DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
 
   scan:
+    needs: [detect-changes]
     uses: ./.github/workflows/_scan.yml
+    with:
+      skip-trivy: ${{ needs.detect-changes.outputs.run-code-ci != 'true' }}
     secrets:
       DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
 
   test:
+    needs: [detect-changes]
+    if: needs.detect-changes.outputs.run-code-ci == 'true'
     uses: ./.github/workflows/_test.yml
     secrets:
       DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
 
   bench:
+    needs: [detect-changes]
+    if: needs.detect-changes.outputs.run-code-ci == 'true'
     uses: ./.github/workflows/_bench.yml
     secrets:
       DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
 
   build-images-amd64:
+    needs: [detect-changes]
+    if: needs.detect-changes.outputs.run-code-ci == 'true'
     uses: ./.github/workflows/_build-image.yml
     with:
       arch: amd64
@@ -40,6 +70,8 @@ jobs:
       OTEL_EXPORTER_OTLP_ENDPOINT: ${{ secrets.OTEL_EXPORTER_OTLP_ENDPOINT }}
 
   build-images-arm64:
+    needs: [detect-changes]
+    if: needs.detect-changes.outputs.run-code-ci == 'true'
     uses: ./.github/workflows/_build-image.yml
     with:
       arch: arm64
@@ -49,6 +81,8 @@ jobs:
       OTEL_EXPORTER_OTLP_ENDPOINT: ${{ secrets.OTEL_EXPORTER_OTLP_ENDPOINT }}
 
   build-releases-amd64:
+    needs: [detect-changes]
+    if: needs.detect-changes.outputs.run-code-ci == 'true'
     uses: ./.github/workflows/_build-release.yml
     with:
       arch: amd64
@@ -56,6 +90,8 @@ jobs:
       DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
 
   build-releases-arm64:
+    needs: [detect-changes]
+    if: needs.detect-changes.outputs.run-code-ci == 'true'
     uses: ./.github/workflows/_build-release.yml
     with:
       arch: arm64
@@ -63,7 +99,8 @@ jobs:
       DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
 
   smoke-tests-binary-amd64:
-    needs: [build-releases-amd64]
+    needs: [detect-changes, build-releases-amd64]
+    if: needs.detect-changes.outputs.run-code-ci == 'true'
     uses: ./.github/workflows/_smoke-tests-binary.yml
     with:
       arch: amd64
@@ -72,7 +109,8 @@ jobs:
       DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
 
   smoke-tests-container-amd64:
-    needs: [build-images-amd64]
+    needs: [detect-changes, build-images-amd64]
+    if: needs.detect-changes.outputs.run-code-ci == 'true'
     uses: ./.github/workflows/_smoke-tests-container.yml
     with:
       arch: amd64
@@ -81,7 +119,8 @@ jobs:
       DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
 
   smoke-tests-binary-arm64:
-    needs: [build-releases-arm64]
+    needs: [detect-changes, build-releases-arm64]
+    if: needs.detect-changes.outputs.run-code-ci == 'true'
     uses: ./.github/workflows/_smoke-tests-binary.yml
     with:
       arch: arm64
@@ -90,7 +129,8 @@ jobs:
       DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
 
   smoke-tests-container-arm64:
-    needs: [build-images-arm64]
+    needs: [detect-changes, build-images-arm64]
+    if: needs.detect-changes.outputs.run-code-ci == 'true'
     uses: ./.github/workflows/_smoke-tests-container.yml
     with:
       arch: arm64
@@ -99,12 +139,15 @@ jobs:
       DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
 
   install-tests:
+    needs: [detect-changes]
+    if: needs.detect-changes.outputs.run-code-ci == 'true'
     uses: ./.github/workflows/_install-tests.yml
     secrets:
       DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
 
   compatibility-tests-binary-amd64:
-    needs: [build-releases-amd64]
+    needs: [detect-changes, build-releases-amd64]
+    if: needs.detect-changes.outputs.run-code-ci == 'true'
     uses: ./.github/workflows/_compatibility-tests-binary.yml
     with:
       arch: amd64
@@ -113,7 +156,8 @@ jobs:
       DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
 
   compatibility-tests-container-amd64:
-    needs: [build-images-amd64]
+    needs: [detect-changes, build-images-amd64]
+    if: needs.detect-changes.outputs.run-code-ci == 'true'
     uses: ./.github/workflows/_compatibility-tests-container.yml
     with:
       arch: amd64
@@ -122,7 +166,8 @@ jobs:
       DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
 
   compatibility-tests-binary-arm64:
-    needs: [build-releases-arm64]
+    needs: [detect-changes, build-releases-arm64]
+    if: needs.detect-changes.outputs.run-code-ci == 'true'
     uses: ./.github/workflows/_compatibility-tests-binary.yml
     with:
       arch: arm64
@@ -131,7 +176,8 @@ jobs:
       DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
 
   compatibility-tests-container-arm64:
-    needs: [build-images-arm64]
+    needs: [detect-changes, build-images-arm64]
+    if: needs.detect-changes.outputs.run-code-ci == 'true'
     uses: ./.github/workflows/_compatibility-tests-container.yml
     with:
       arch: arm64

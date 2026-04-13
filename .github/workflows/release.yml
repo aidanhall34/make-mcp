@@ -10,8 +10,31 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  detect-changes:
+    name: detect-changes
+    runs-on: ubuntu-latest
+    outputs:
+      run-code-release: ${{ steps.filter.outputs.run-code-release }}
+      run-wiki-sync: ${{ steps.filter.outputs.run-wiki-sync }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect changes requiring code release or wiki sync
+        id: filter
+        run: |
+          python3 .github/scripts/detect_changes.py \
+            --git-base '${{ github.event.before }}' \
+            --ignore-file '.github/scripts/ignore-patterns.txt' \
+            --rule 'run-wiki-sync:wiki/*' \
+            --default 'run-code-release'
+
   semantic-release:
     name: semantic-release
+    needs: [detect-changes]
+    if: needs.detect-changes.outputs.run-code-release == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -459,7 +482,12 @@ jobs:
 
   publish-wiki:
     name: publish-wiki
-    needs: [install-test-releases, pull-test-containers]
+    needs: [detect-changes, semantic-release]
+    if: |
+      always() &&
+      !cancelled() &&
+      !failure() &&
+      (needs.detect-changes.outputs.run-wiki-sync == 'true' || needs.semantic-release.outputs.released == 'true')
     runs-on: ubuntu-latest
     permissions:
       contents: write

@@ -1,5 +1,37 @@
 SHELL=/usr/bin/env bash
 
+LGTM_VERSION := 0.23.0
+VENV ?= .venv
+DEV_DIR = ./dev
+_LOG_DIR := $(DEV_DIR)/logs
+_GIT_TAG  := $(shell git tag --points-at HEAD | tr '\n' ' ' | xargs -r semver 2>/dev/null | head -1)
+_GIT_SHA  := $(shell git rev-parse --short HEAD)
+K6_IMAGE ?= make-mcp-k6:local
+K6_SCRIPT ?= /scripts/integration.js
+_K6_SCRIPT_SLUG := $(shell printf '%s' "$(notdir $(K6_SCRIPT))" | tr '[:upper:]' '[:lower:]' | tr -cs '[:alnum:]' '-')
+DEV_COMPOSE_PROJECT ?= make-mcp-dev
+INTEGRATION_COMPOSE_PROJECT ?= make-mcp-integration-$(_K6_SCRIPT_SLUG)-$(_GIT_SHA)
+K6_OTEL_GRPC_EXPORTER_ENDPOINT ?=
+K6_OTEL_GRPC_EXPORTER_INSECURE ?= true
+K6_OTEL_SERVICE_NAME ?= make-mcp-integration
+OTEL_TRACES_EXPORTER ?= otlp
+OTEL_METRICS_EXPORTER ?= otlp
+OTEL_EXPORTER_OTLP_ENDPOINT ?= http://host.docker.internal:4317
+OTEL_EXPORTER_OTLP_INSECURE ?= true
+OTEL_SERVICE_NAME ?= make-mcp-server
+OTEL_METRIC_EXPORT_INTERVAL ?= 2000
+_DEV_LGTM_COMPOSE := -f "$(DEV_DIR)/docker-compose.lgtm.yml"
+_DEV_GRAFANA_MCP_COMPOSE := -f "$(DEV_DIR)/docker-compose.grafana-mcp.yml"
+_DEV_FULL_COMPOSE := $(_DEV_LGTM_COMPOSE) $(_DEV_GRAFANA_MCP_COMPOSE)
+_INTEGRATION_SERVER_COMPOSE := -f "$(DEV_DIR)/docker-compose.integration.server.yml"
+_INTEGRATION_RUNNER_COMPOSE := -f "$(DEV_DIR)/docker-compose.integration.runner.yml"
+_INTEGRATION_STACK_COMPOSE := $(_INTEGRATION_SERVER_COMPOSE) $(_INTEGRATION_RUNNER_COMPOSE)
+_INTEGRATION_BINARY_RUNNER_COMPOSE := -f "$(DEV_DIR)/docker-compose.integration.binary-runner.yml"
+_INTEGRATION_TELEMETRY_COMPOSE := -f "$(DEV_DIR)/docker-compose.integration.telemetry-host.yml"
+_DEV_COMPOSE_ENV := COMPOSE_PROJECT_NAME="$(DEV_COMPOSE_PROJECT)"
+_INTEGRATION_COMPOSE_ENV := COMPOSE_PROJECT_NAME="$(INTEGRATION_COMPOSE_PROJECT)"
+_INTEGRATION_OTEL_COMPOSE := $(_INTEGRATION_STACK_COMPOSE) $(_INTEGRATION_TELEMETRY_COMPOSE)
+
 # Tee stdout and stderr to both the terminal and a recipe log file while
 # preserving the original streams. Requires bash (process substitution).
 # Usage: append $(call _tee-log,<name>) to the end of a { ... } group,

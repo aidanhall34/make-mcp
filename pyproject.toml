@@ -4,5 +4,20 @@ version = "0.1.0"
 description = "Python tooling for make-mcp"
 requires-python = ">=3.13"
 dependencies = [
+    "gitpython>=3.1",
     "yamllint>=1.38.0",
 ]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-cov>=5.0",
+]
+
+[tool.coverage.run]
+source = [".github/scripts"]
+omit = [".github/scripts/tests/*"]
+
+[tool.coverage.report]
+show_missing = true
+fail_under = 90
