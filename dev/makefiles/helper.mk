@@ -237,4 +237,5 @@ dev-mcp-inspector: build-mcp-server
 # Run 'make mcp-server-up' first to ensure the server is running.
 .PHONY: dev-mcp-inspector-http
 dev-mcp-inspector-http:
-	npx @modelcontextprotocol/inspector http://localhost:9378/mcp ;
+	NODE_EXTRA_CA_CERTS="$(CERTS_DIR)/ca.crt" \
+	npx @modelcontextprotocol/inspector https://localhost:9378/mcp ;

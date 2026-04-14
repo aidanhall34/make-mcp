@@ -11,7 +11,6 @@
   "bruteForceProtected": true,
   "accessTokenLifespan": 300,
   "ssoSessionMaxLifespan": 36000,
-
   "clients": [
     {
       "clientId": "make-mcp",
@@ -64,7 +63,6 @@
       ]
     }
   ],
-
   "groups": [
     {
       "name": "admins",
@@ -72,7 +70,46 @@
       "subGroups": []
     }
   ],
-
+  "components": {
+    "org.keycloak.services.clientregistration.policy.ClientRegistrationPolicy": [
+      {
+        "name": "Trusted Hosts",
+        "providerId": "trusted-hosts",
+        "subType": "anonymous",
+        "subComponents": {},
+        "config": {
+          "host-sending-registration-request-must-match": [
+            "true"
+          ],
+          "client-uris-must-match": [
+            "true"
+          ],
+          "trusted-hosts": [
+            "localhost",
+            "127.0.0.1"
+          ]
+        }
+      },
+      {
+        "name": "Trusted Hosts",
+        "providerId": "trusted-hosts",
+        "subType": "authenticated",
+        "subComponents": {},
+        "config": {
+          "host-sending-registration-request-must-match": [
+            "true"
+          ],
+          "client-uris-must-match": [
+            "true"
+          ],
+          "trusted-hosts": [
+            "localhost",
+            "127.0.0.1"
+          ]
+        }
+      }
+    ]
+  },
   "users": [
     {
       "username": "testuser",

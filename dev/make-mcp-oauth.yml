@@ -25,7 +25,7 @@ tls:
   cert: ./dev/certs/server.crt
   key: ./dev/certs/server.key
   ca: ./dev/certs/ca.crt
-  # cors_origin: ""   # set to a specific origin to lock down browser access
+  cors_origin: "*" # set to a specific origin to lock down browser access
 
 timeouts:
   low: 10m

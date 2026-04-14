@@ -8,10 +8,9 @@ services:
       - --https-management-certificate-file=/certs/server.crt
       - --https-management-certificate-key-file=/certs/server.key
       - --import-realm
-      - --optimized
-      - --hostname=keycloak
+      - --hostname=localhost
     environment:
-      KC_HOSTNAME: keycloak
+      KC_HOSTNAME: localhost
       KC_HTTPS_PORT: "8443"
       KC_HTTP_ENABLED: "false"
       KEYCLOAK_ADMIN: admin
@@ -29,6 +28,7 @@ services:
     volumes:
       - ./certs:/certs:ro
       - ./keycloak:/opt/keycloak/data/import:ro
+      - make-mcp-keycloak-data:/opt/keycloak/data
     healthcheck:
       test:
         - CMD-SHELL
@@ -37,3 +37,7 @@ services:
       timeout: 5s
       retries: 10
       start_period: 40s
+
+
+volumes:
+  make-mcp-keycloak-data:
