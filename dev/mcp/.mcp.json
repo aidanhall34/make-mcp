@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "make-mcp": {
+      "type": "http",
+      "url": "https://localhost:9378/mcp"
+    }
+  }
+}

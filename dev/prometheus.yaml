@@ -93,3 +93,12 @@ scrape_configs:
   - job_name: mcp-grafana
     static_configs:
       - targets: ["mcp-grafana:8001"]
+
+  # Keycloak — management interface exposes /metrics on port 9000 over HTTPS.
+  - job_name: keycloak
+    scheme: https
+    metrics_path: /metrics
+    tls_config:
+      ca_file: /certs/ca.crt
+    static_configs:
+      - targets: ["keycloak:9000"]

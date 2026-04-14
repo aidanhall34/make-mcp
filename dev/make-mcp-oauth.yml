@@ -1,0 +1,54 @@
+# make-mcp OAuth example configuration.
+# Start Keycloak first: make gen-certs && make dev-up OAUTH=true
+# Then start the server pointing at this file:
+#   ./bin/make-mcp --config dev/make-mcp-oauth.yml
+#
+# Prerequisites:
+#   1. Run `make gen-certs` to generate dev/certs/{ca.crt,server.crt,server.key}
+#   2. Run `make dev-up OAUTH=true` to start LGTM + Keycloak
+#   3. In Keycloak admin (https://localhost:8443):
+#      - Create realm "make-mcp"
+#      - Create client "make-mcp" (confidential, standard flow)
+#      - Create a group "/admins" and assign it to a test user
+#      - Add "groups" claim to the client token mapper
+
+delimiter: "@"
+makefiles:
+  - ./makefile
+
+transport: "http"
+listen: "127.0.0.1:9378"
+log_path: "dev/logs/make-mcp-oauth.log"
+debug: true
+
+tls:
+  cert: ./dev/certs/server.crt
+  key: ./dev/certs/server.key
+  ca: ./dev/certs/ca.crt
+  cors_origin: "*" # set to a specific origin to lock down browser access
+
+timeouts:
+  low: 10m
+  medium: 10m
+  high: 10m
+
+# Resources exposed as MCP file resources.
+resources:
+  recursive: false
+  paths:
+    - name: "makefiles"
+      description: "Project Makefiles exposed as readable resources"
+      path:
+        - "./makefile"
+        - "./dev/makefiles/*.mk"
+
+# OAuth 2.1 / Bearer token authentication via Keycloak.
+oauth:
+  enabled: true
+  issuer: "https://localhost:8443/realms/make-mcp"
+  audience: "make-mcp"
+  jwks_uri: "https://localhost:8443/realms/make-mcp/protocol/openid-connect/certs"
+  groups:
+    - name: "/admins"
+      resources:
+        - "makefiles"

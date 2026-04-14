@@ -237,3 +237,302 @@ func TestMerge_DoesNotMutateBase(t *testing.T) {
 		t.Errorf("Merge mutated base: delimiter is now %q", base.Delimiter)
 	}
 }
+
+func TestLoadFile_ResourcesBlock(t *testing.T) {
+	content := `
+makefiles:
+  - ./makefile
+resources:
+  recursive: true
+  paths:
+    - name: "config-files"
+      description: "Config files"
+      path:
+        - "./config/*.yml"
+      recursive: false
+    - name: "logs"
+      path:
+        - "./logs/"
+`
+	f, err := os.CreateTemp(t.TempDir(), "make-mcp-*.yml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.WriteString(content)
+	f.Close()
+
+	cfg, err := config.LoadFile(f.Name())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !cfg.Resources.Recursive {
+		t.Error("resources.recursive: want true")
+	}
+	if len(cfg.Resources.Paths) != 2 {
+		t.Fatalf("resources.paths: got %d, want 2", len(cfg.Resources.Paths))
+	}
+	p0 := cfg.Resources.Paths[0]
+	if p0.Name != "config-files" {
+		t.Errorf("paths[0].name: got %q, want config-files", p0.Name)
+	}
+	if p0.Description != "Config files" {
+		t.Errorf("paths[0].description: got %q, want 'Config files'", p0.Description)
+	}
+	if p0.Recursive == nil || *p0.Recursive {
+		t.Errorf("paths[0].recursive: want *false, got %v", p0.Recursive)
+	}
+	if len(p0.Path) != 1 || p0.Path[0] != "./config/*.yml" {
+		t.Errorf("paths[0].path: got %v", p0.Path)
+	}
+	p1 := cfg.Resources.Paths[1]
+	if p1.Name != "logs" {
+		t.Errorf("paths[1].name: got %q, want logs", p1.Name)
+	}
+	if p1.Recursive != nil {
+		t.Errorf("paths[1].recursive: want nil (inherit), got %v", p1.Recursive)
+	}
+}
+
+func TestLoadFile_OAuthBlock(t *testing.T) {
+	content := `
+makefiles:
+  - ./makefile
+tls:
+  cert: ./certs/server.crt
+  key: ./certs/server.key
+  ca: ./certs/ca.crt
+  cors_origin: "https://claude.ai"
+oauth:
+  enabled: true
+  issuer: "https://localhost:8443/realms/make-mcp"
+  audience: "make-mcp"
+  jwks_uri: "https://localhost:8443/realms/make-mcp/protocol/openid-connect/certs"
+  groups:
+    - name: "admins"
+      resources:
+        - "config-files"
+`
+	f, err := os.CreateTemp(t.TempDir(), "make-mcp-*.yml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.WriteString(content)
+	f.Close()
+
+	cfg, err := config.LoadFile(f.Name())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !cfg.OAuth.Enabled {
+		t.Error("oauth.enabled: want true")
+	}
+	if cfg.OAuth.Issuer != "https://localhost:8443/realms/make-mcp" {
+		t.Errorf("oauth.issuer: got %q", cfg.OAuth.Issuer)
+	}
+	if cfg.OAuth.Audience != "make-mcp" {
+		t.Errorf("oauth.audience: got %q", cfg.OAuth.Audience)
+	}
+	if cfg.OAuth.JWKSURI != "https://localhost:8443/realms/make-mcp/protocol/openid-connect/certs" {
+		t.Errorf("oauth.jwks_uri: got %q", cfg.OAuth.JWKSURI)
+	}
+	if cfg.TLS.Cert != "./certs/server.crt" {
+		t.Errorf("tls.cert: got %q", cfg.TLS.Cert)
+	}
+	if cfg.TLS.Key != "./certs/server.key" {
+		t.Errorf("tls.key: got %q", cfg.TLS.Key)
+	}
+	if cfg.TLS.CA != "./certs/ca.crt" {
+		t.Errorf("tls.ca: got %q", cfg.TLS.CA)
+	}
+	if cfg.TLS.CORSOrigin != "https://claude.ai" {
+		t.Errorf("tls.cors_origin: got %q", cfg.TLS.CORSOrigin)
+	}
+	if len(cfg.OAuth.Groups) != 1 {
+		t.Fatalf("oauth.groups: got %d, want 1", len(cfg.OAuth.Groups))
+	}
+	g := cfg.OAuth.Groups[0]
+	if g.Name != "admins" {
+		t.Errorf("groups[0].name: got %q, want admins", g.Name)
+	}
+	if len(g.Resources) != 1 || g.Resources[0] != "config-files" {
+		t.Errorf("groups[0].resources: got %v", g.Resources)
+	}
+}
+
+func TestMerge_ResourcesOverride(t *testing.T) {
+	base := config.Config{
+		Resources: config.ResourcesConfig{
+			Paths: []config.ResourcePath{{Name: "old"}},
+		},
+	}
+	override := config.Config{
+		Resources: config.ResourcesConfig{
+			Recursive: true,
+			Paths:     []config.ResourcePath{{Name: "new1"}, {Name: "new2"}},
+		},
+	}
+	result := config.Merge(base, override)
+	if len(result.Resources.Paths) != 2 {
+		t.Fatalf("merge resources: got %d paths, want 2", len(result.Resources.Paths))
+	}
+	if result.Resources.Paths[0].Name != "new1" {
+		t.Errorf("merge resources: paths[0].name got %q, want new1", result.Resources.Paths[0].Name)
+	}
+	if !result.Resources.Recursive {
+		t.Error("merge resources: recursive should be true")
+	}
+}
+
+func TestMerge_ResourcesBasePreservedWhenOverrideEmpty(t *testing.T) {
+	base := config.Config{
+		Resources: config.ResourcesConfig{
+			Paths: []config.ResourcePath{{Name: "kept"}},
+		},
+	}
+	result := config.Merge(base, config.Config{})
+	if len(result.Resources.Paths) != 1 || result.Resources.Paths[0].Name != "kept" {
+		t.Errorf("merge resources: base not preserved: %v", result.Resources.Paths)
+	}
+}
+
+func TestMerge_OAuthEnabled(t *testing.T) {
+	base := config.Config{OAuth: config.OAuthConfig{Enabled: false, Issuer: "old"}}
+	override := config.Config{OAuth: config.OAuthConfig{Enabled: true, Issuer: "new"}}
+	result := config.Merge(base, override)
+	if !result.OAuth.Enabled {
+		t.Error("merge oauth: enabled should be true")
+	}
+	if result.OAuth.Issuer != "new" {
+		t.Errorf("merge oauth: issuer got %q, want new", result.OAuth.Issuer)
+	}
+}
+
+func TestMerge_OAuthBasePreservedWhenOverrideDisabled(t *testing.T) {
+	base := config.Config{OAuth: config.OAuthConfig{Enabled: true, Issuer: "kept"}}
+	result := config.Merge(base, config.Config{})
+	if !result.OAuth.Enabled {
+		t.Error("merge oauth: base enabled should be preserved")
+	}
+	if result.OAuth.Issuer != "kept" {
+		t.Errorf("merge oauth: base issuer should be preserved, got %q", result.OAuth.Issuer)
+	}
+}
+
+func TestDefault_ZeroValueOAuthAndResources(t *testing.T) {
+	cfg := config.Default()
+	if cfg.OAuth.Enabled {
+		t.Error("default oauth.enabled: want false")
+	}
+	if len(cfg.Resources.Paths) != 0 {
+		t.Errorf("default resources.paths: want empty, got %v", cfg.Resources.Paths)
+	}
+	if cfg.PageSize != 0 {
+		t.Errorf("default page_size: want 0, got %d", cfg.PageSize)
+	}
+}
+
+func TestLoadFile_PageSize(t *testing.T) {
+	content := `
+makefiles:
+  - ./makefile
+page_size: 50
+`
+	f, err := os.CreateTemp(t.TempDir(), "make-mcp-*.yml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.WriteString(content)
+	f.Close()
+
+	cfg, err := config.LoadFile(f.Name())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.PageSize != 50 {
+		t.Errorf("page_size: got %d, want 50", cfg.PageSize)
+	}
+}
+
+func TestMerge_PageSizeOverride(t *testing.T) {
+	base := config.Config{PageSize: 25}
+	override := config.Config{PageSize: 100}
+	result := config.Merge(base, override)
+	if result.PageSize != 100 {
+		t.Errorf("merge page_size: got %d, want 100", result.PageSize)
+	}
+}
+
+func TestMerge_PageSizeBasePreservedWhenOverrideZero(t *testing.T) {
+	base := config.Config{PageSize: 25}
+	result := config.Merge(base, config.Config{})
+	if result.PageSize != 25 {
+		t.Errorf("merge page_size: base not preserved, got %d", result.PageSize)
+	}
+}
+
+func TestMerge_TLSOverride(t *testing.T) {
+	base := config.Config{
+		TLS: config.TLSConfig{
+			Cert:       "old.crt",
+			Key:        "old.key",
+			CA:         "old-ca.crt",
+			CORSOrigin: "https://old.example.com",
+		},
+	}
+	override := config.Config{
+		TLS: config.TLSConfig{
+			Cert:       "new.crt",
+			Key:        "new.key",
+			CA:         "new-ca.crt",
+			CORSOrigin: "https://new.example.com",
+		},
+	}
+
+	result := config.Merge(base, override)
+	if result.TLS.Cert != "new.crt" {
+		t.Errorf("tls.cert: got %q, want new.crt", result.TLS.Cert)
+	}
+	if result.TLS.Key != "new.key" {
+		t.Errorf("tls.key: got %q, want new.key", result.TLS.Key)
+	}
+	if result.TLS.CA != "new-ca.crt" {
+		t.Errorf("tls.ca: got %q, want new-ca.crt", result.TLS.CA)
+	}
+	if result.TLS.CORSOrigin != "https://new.example.com" {
+		t.Errorf("tls.cors_origin: got %q, want https://new.example.com", result.TLS.CORSOrigin)
+	}
+}
+
+func TestMerge_TLSBasePreservedWhenOverrideEmpty(t *testing.T) {
+	base := config.Config{
+		TLS: config.TLSConfig{
+			Cert:       "base.crt",
+			Key:        "base.key",
+			CA:         "base-ca.crt",
+			CORSOrigin: "https://base.example.com",
+		},
+	}
+
+	result := config.Merge(base, config.Config{})
+	if result.TLS.Cert != "base.crt" {
+		t.Errorf("tls.cert: base not preserved, got %q", result.TLS.Cert)
+	}
+	if result.TLS.Key != "base.key" {
+		t.Errorf("tls.key: base not preserved, got %q", result.TLS.Key)
+	}
+	if result.TLS.CA != "base-ca.crt" {
+		t.Errorf("tls.ca: base not preserved, got %q", result.TLS.CA)
+	}
+	if result.TLS.CORSOrigin != "https://base.example.com" {
+		t.Errorf("tls.cors_origin: base not preserved, got %q", result.TLS.CORSOrigin)
+	}
+}
+
+func TestMerge_LogPathOverride(t *testing.T) {
+	base := config.Config{LogPath: "stderr"}
+	override := config.Config{LogPath: "/var/log/make-mcp.log"}
+	result := config.Merge(base, override)
+	if result.LogPath != "/var/log/make-mcp.log" {
+		t.Errorf("log_path: got %q, want /var/log/make-mcp.log", result.LogPath)
+	}
+}

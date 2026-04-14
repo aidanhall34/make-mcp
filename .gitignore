@@ -3,6 +3,7 @@ dist/
 dev/logs
 dev/run
 dev/tmp
+dev/certs
 node_modules/
 GEMINI.md
 coverage.out

@@ -3,6 +3,8 @@ SHELL=/usr/bin/env bash
 _PID_DIR             := $(CURDIR)/dev/run
 _MCP_PID_FILE        := $(_PID_DIR)/make-mcp.pid
 _LGTM_LOGS_PID_FILE  := $(_PID_DIR)/lgtm-logs.pid
+_MCP_CONFIG          := $(if $(filter true,$(OAUTH)),$(DEV_DIR)/make-mcp-oauth.yml,$(DEV_DIR)/make-mcp.yml)
+_MCP_LOG             := $(_LOG_DIR)/make-mcp-server.log
 
 .PHONY: otelcol-validate
 # @ name: Validate OpenTelemetry collector configuration
@@ -112,6 +114,7 @@ dev-down: mcp-server-down
 		--env-file="$(DEV_DIR)/compose_versions" \
 		$(_DEV_FULL_COMPOSE) \
 		down ; }
+	@docker volume rm make-mcp-dev_make-mcp-keycloak-data 2>/dev/null || true
 
 .PHONY: dev-logs
 # @ name: Fetch Docker Compose Logs
@@ -129,7 +132,7 @@ dev-logs:
 
 .PHONY: mcp-server-up
 # @ name: Start make-mcp server
-# @ description: Starts the make-mcp HTTP server as a local background process. Stops any existing instance first so re-running this after a new binary is built picks up the latest version. Requires start-stop-daemon (available on Debian/Ubuntu).
+# @ description: Starts the make-mcp HTTP server as a local background process. Stops any existing instance first so re-running this after a new binary is built picks up the latest version. Pass OAUTH=true to start with OAuth 2.1 Bearer token validation and TLS enabled (requires make gen-certs and a running Keycloak). Requires start-stop-daemon (available on Debian/Ubuntu).
 # @ risk: low
 # @ read-only: false
 # @ destructive: false
@@ -140,8 +143,8 @@ dev-logs:
 # @ output-type: text/plain
 mcp-server-up:
 	@mkdir -p "$(CURDIR)/dev/run" "$(_LOG_DIR)"
-	@touch "$(_LOG_DIR)/make-mcp-server.log"
-	@chmod 664 "$(_LOG_DIR)/make-mcp-server.log"
+	@touch "$(_MCP_LOG)"
+	@chmod 664 "$(_MCP_LOG)"
 	@if [ -f "$(_MCP_PID_FILE)" ]; then \
 		start-stop-daemon --stop --pidfile "$(_MCP_PID_FILE)" \
 			--retry TERM/5/KILL/2 2>/dev/null || true ; \
@@ -158,8 +161,8 @@ mcp-server-up:
 		--pidfile "$(_MCP_PID_FILE)" --make-pidfile \
 		--chdir "$(CURDIR)" \
 		--exec "$(CURDIR)/bin/make-mcp" \
-		--output "$(CURDIR)/dev/logs/make-mcp-server.log" \
-		-- --config "$(DEV_DIR)/make-mcp.yml"
+		--output "$(CURDIR)/$(_MCP_LOG)" \
+		-- --config "$(_MCP_CONFIG)"
 
 .PHONY: mcp-server-down
 # @ name: Stop make-mcp server
@@ -180,6 +183,42 @@ mcp-server-down:
 			rm -f "$(_MCP_PID_FILE)" ; \
 		fi ; \
 	}
+
+.PHONY: get-dev-token
+# @ name: Obtain a dev OAuth access token
+# @ description: Fetches a short-lived Bearer token from the local Keycloak dev server using the testuser direct-grant flow. Prints the raw access token to stdout — useful for scripted curl testing against the OAuth-protected MCP server. Requires the dev stack to be running (make dev-up-oauth).
+# @ risk: low
+# @ read-only: true
+# @ destructive: false
+# @ idempotent: true
+# @ open-world: true
+# @ param: none
+# @ output: Raw JWT access token
+# @ output-type: text/plain
+get-dev-token:
+	@curl -sk \
+		--cacert "$(DEV_DIR)/certs/ca.crt" \
+		-d "client_id=make-mcp" \
+		-d "client_secret=make-mcp-secret" \
+		-d "username=testuser" \
+		-d "password=testpassword" \
+		-d "grant_type=password" \
+		"https://localhost:8443/realms/make-mcp/protocol/openid-connect/token" \
+		| jq -r .access_token
+
+.PHONY: dev-up-oauth
+# @ name: Start development dependencies (OAuth + TLS)
+# @ description: Starts the full local development stack — LGTM, Grafana MCP sidecar, and Keycloak — then starts the make-mcp HTTP server with OAuth 2.1 Bearer token validation and TLS enabled. Run 'make gen-certs' first if dev/certs/ is missing. Idempotent: re-running stops the current server and starts a fresh one.
+# @ risk: low
+# @ read-only: false
+# @ destructive: false
+# @ idempotent: true
+# @ open-world: true
+# @ param: none
+# @ output: none
+# @ output-type: text/plain
+dev-up-oauth:
+	$(MAKE) dev-up OAUTH=true
 
 .PHONY: integration-debug
 # @ name: Integration Debug (local LGTM)

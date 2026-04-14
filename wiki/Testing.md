@@ -97,6 +97,122 @@ Inside the Docker build, the endpoint is injected at build time via
 
 ---
 
+## Running with TLS and OAuth
+
+The OAuth development stack runs LGTM + Keycloak + the make-mcp HTTP server
+with TLS and Bearer token authentication enabled.
+
+### Prerequisites
+
+**One-time setup — generate TLS certificates:**
+
+```sh
+make gen-certs
+# Creates dev/certs/{ca.crt,server.crt,server.key}
+```
+
+**One-time Keycloak realm setup:**
+
+The Keycloak container imports `dev/keycloak/make-mcp-realm.json` automatically
+on first boot.  The realm creates:
+
+| Resource | Value |
+|---|---|
+| Realm | `make-mcp` |
+| Client ID | `make-mcp` |
+| Client secret | `make-mcp-secret` |
+| Test user | `testuser` / `testpassword` |
+| Group | `/admins` (test user is a member) |
+
+### Starting the full stack
+
+```sh
+make dev-up-oauth
+```
+
+This recipe:
+
+1. Creates Docker volumes (idempotent).
+2. Starts LGTM, Grafana MCP sidecar, and Keycloak (`make dev-up OAUTH=true`).
+   Keycloak imports the realm from `dev/keycloak/make-mcp-realm.json` on first
+   start; subsequent starts skip the import if the realm already exists.
+3. Waits for all containers to be healthy.
+4. Stops any running make-mcp instance, then starts the server with
+   `dev/make-mcp-oauth.yml` (HTTPS on `https://localhost:9378`, OAuth enabled,
+   Keycloak issuer `https://keycloak:8443/realms/make-mcp`).
+
+To restart only the server after rebuilding the binary:
+
+```sh
+make build-mcp-server
+make mcp-server-up OAUTH=true
+```
+
+### Connecting an MCP client
+
+A project-level MCP config is provided at `dev/mcp/.mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "make-mcp": {
+      "type": "http",
+      "url": "https://localhost:9378/mcp"
+    }
+  }
+}
+```
+
+Copy or symlink this to the root of the project (Claude Code picks up
+`.mcp.json` at the project root) or reference it from your client config.
+The client discovers the OAuth server automatically via
+`/.well-known/oauth-protected-resource` and performs the PKCE authorization
+code flow against Keycloak.
+
+### Obtaining a token manually (curl / testing)
+
+```sh
+make get-dev-token
+```
+
+Or invoke the underlying curl directly:
+
+```sh
+# Direct grant — useful for scripted testing only (not a browser flow).
+curl -sk \
+  --cacert dev/certs/ca.crt \
+  -d "client_id=make-mcp" \
+  -d "client_secret=make-mcp-secret" \
+  -d "username=testuser" \
+  -d "password=testpassword" \
+  -d "grant_type=password" \
+  "https://localhost:8443/realms/make-mcp/protocol/openid-connect/token" \
+  | jq -r .access_token
+```
+
+Use the resulting token as a Bearer header:
+
+```sh
+TOKEN=$(make get-dev-token)
+
+curl -sk --cacert dev/certs/ca.crt \
+  -H "Authorization: Bearer $TOKEN" \
+  https://localhost:9378/ready
+```
+
+### Tearing down
+
+```sh
+make dev-down
+```
+
+`dev-down` stops the make-mcp server and the full Docker Compose stack
+(LGTM + Keycloak). The Keycloak realm data lives only in the container's
+ephemeral storage — it is re-imported from `dev/keycloak/make-mcp-realm.json`
+on the next `dev-up-oauth`.
+
+---
+
 ## Integration tests
 
 Integration tests verify the MCP protocol interface (streamable HTTP) from the

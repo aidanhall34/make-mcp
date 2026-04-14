@@ -27,6 +27,76 @@ type Timeouts struct {
 	High   time.Duration `yaml:"high"`
 }
 
+// TLSConfig holds TLS certificate paths and HTTP security settings for the
+// HTTP server. When Cert and Key are set the server listens on HTTPS instead
+// of plain HTTP.
+type TLSConfig struct {
+	// Cert is the path to the PEM-encoded server certificate.
+	Cert string `yaml:"cert"`
+	// Key is the path to the PEM-encoded server private key.
+	Key string `yaml:"key"`
+	// CA is an optional path to a PEM-encoded CA certificate used to trust
+	// self-signed certificates (e.g. a local Keycloak instance).
+	CA string `yaml:"ca"`
+	// CORSOrigin restricts which browser origins may access the HTTP /mcp
+	// endpoint. Empty or "*" permits any origin (suitable for local
+	// development and MCP Inspector). When set to a specific URL (e.g.
+	// "https://claude.ai"), Access-Control-Allow-Origin is only set when the
+	// request Origin header matches exactly; all other browser origins are
+	// blocked. Has no effect on non-browser clients or the stdio transport.
+	CORSOrigin string `yaml:"cors_origin"`
+}
+
+// ResourcePath describes a named set of files, directories, or globs to expose
+// as MCP resources.
+type ResourcePath struct {
+	// Name identifies this path group and is used when mapping OAuth groups to
+	// resource access.
+	Name string `yaml:"name"`
+	// Description is an optional human-readable description applied to all
+	// resources discovered by this path group.
+	Description string `yaml:"description"`
+	// Path is the list of file paths, directory paths, or glob patterns whose
+	// matching files are exposed as resources.
+	Path []string `yaml:"path"`
+	// Recursive controls whether directory entries are expanded recursively. A
+	// nil value inherits the top-level ResourcesConfig.Recursive default.
+	Recursive *bool `yaml:"recursive"`
+}
+
+// ResourcesConfig controls which files are exposed as MCP resources.
+type ResourcesConfig struct {
+	// Recursive is the top-level default for whether directories are traversed
+	// recursively. Individual ResourcePath entries may override this.
+	Recursive bool `yaml:"recursive"`
+	// Paths is the ordered list of named resource path groups.
+	Paths []ResourcePath `yaml:"paths"`
+}
+
+// OAuthGroupBinding maps an OAuth/OIDC group name to the resource path groups
+// that members of that group are permitted to read.
+type OAuthGroupBinding struct {
+	// Name is the OAuth/OIDC group or role claim value (e.g. "/admins").
+	Name string `yaml:"name"`
+	// Resources is the list of ResourcePath.Name values accessible to this group.
+	Resources []string `yaml:"resources"`
+}
+
+// OAuthConfig configures OAuth 2.1 Bearer token validation for the HTTP server.
+// OAuth is only supported with HTTP transport (not stdio).
+type OAuthConfig struct {
+	// Enabled activates Bearer token validation on the /mcp endpoint.
+	Enabled bool `yaml:"enabled"`
+	// Issuer is the expected "iss" claim in incoming JWTs.
+	Issuer string `yaml:"issuer"`
+	// Audience is the expected "aud" claim in incoming JWTs.
+	Audience string `yaml:"audience"`
+	// JWKSURI is the URL of the JSON Web Key Set used to validate token signatures.
+	JWKSURI string `yaml:"jwks_uri"`
+	// Groups maps OAuth group/role names to the resource path groups they may read.
+	Groups []OAuthGroupBinding `yaml:"groups"`
+}
+
 // Config holds all make-mcp configuration. It is populated from make-mcp.yml
 // and/or CLI flags; CLI flags take precedence over the file.
 type Config struct {
@@ -46,6 +116,11 @@ type Config struct {
 	// Listen is the HTTP bind address when HTTP transport is enabled.
 	Listen string `yaml:"listen"`
 
+	// TLS holds certificate paths and HTTP security settings for the HTTP
+	// server. When TLS.Cert and TLS.Key are set, the server listens on HTTPS.
+	// TLS.Cert and TLS.Key are required when OAuth is enabled.
+	TLS TLSConfig `yaml:"tls"`
+
 	// LogPath is the destination for JSON logs. Defaults to stderr.
 	LogPath string `yaml:"log_path"`
 
@@ -55,6 +130,16 @@ type Config struct {
 
 	// Timeouts configures per-risk execution timeouts.
 	Timeouts Timeouts `yaml:"timeouts"`
+
+	// PageSize is the maximum number of items returned per page in tools/list
+	// and resources/list responses. Zero disables pagination (all items returned).
+	PageSize int `yaml:"page_size"`
+
+	// Resources configures which files are exposed as MCP resources.
+	Resources ResourcesConfig `yaml:"resources"`
+
+	// OAuth configures OAuth 2.1 Bearer token validation (HTTP transport only).
+	OAuth OAuthConfig `yaml:"oauth"`
 }
 
 // Default returns a Config populated with default values.
@@ -107,6 +192,18 @@ func Merge(base, override Config) Config {
 	if override.Listen != "" {
 		out.Listen = override.Listen
 	}
+	if override.TLS.Cert != "" {
+		out.TLS.Cert = override.TLS.Cert
+	}
+	if override.TLS.Key != "" {
+		out.TLS.Key = override.TLS.Key
+	}
+	if override.TLS.CA != "" {
+		out.TLS.CA = override.TLS.CA
+	}
+	if override.TLS.CORSOrigin != "" {
+		out.TLS.CORSOrigin = override.TLS.CORSOrigin
+	}
 	if override.LogPath != "" {
 		out.LogPath = override.LogPath
 	}
@@ -121,6 +218,15 @@ func Merge(base, override Config) Config {
 	}
 	if override.Timeouts.High != 0 {
 		out.Timeouts.High = override.Timeouts.High
+	}
+	if override.PageSize != 0 {
+		out.PageSize = override.PageSize
+	}
+	if len(override.Resources.Paths) > 0 {
+		out.Resources = override.Resources
+	}
+	if override.OAuth.Enabled {
+		out.OAuth = override.OAuth
 	}
 	return out
 }

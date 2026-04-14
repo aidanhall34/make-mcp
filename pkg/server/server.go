@@ -99,7 +99,17 @@ func New(cfg config.Config, recipes []parser.Recipe) (*ToolServer, error) {
 		telemetry.RecordToolsListBytes(ctx, telemetry.StatusSuccess, bytesIn, bytesOut)
 	})
 
-	s.mcp = mcpserver.NewMCPServer("make-mcp", "dev", mcpserver.WithToolCapabilities(true), mcpserver.WithHooks(hooks))
+	mcpOpts := []mcpserver.ServerOption{
+		mcpserver.WithToolCapabilities(true),
+		mcpserver.WithHooks(hooks),
+	}
+	if len(cfg.Resources.Paths) > 0 {
+		mcpOpts = append(mcpOpts, mcpserver.WithResourceCapabilities(true, true))
+	}
+	if cfg.PageSize > 0 {
+		mcpOpts = append(mcpOpts, mcpserver.WithPaginationLimit(cfg.PageSize))
+	}
+	s.mcp = mcpserver.NewMCPServer("make-mcp", "dev", mcpOpts...)
 
 	tools, recipeIndex, err := buildServerTools(recipes, s.handleToolCall)
 	if err != nil {

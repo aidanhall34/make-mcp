@@ -202,6 +202,117 @@ func TestRecordToolsListRequestIncrementsCounter(t *testing.T) {
 	}
 }
 
+func TestRecordAuthAttempt(t *testing.T) {
+	reader := setupManualMeter(t)
+
+	RecordAuthAttempt(context.Background(), StatusSuccess, 2*time.Millisecond)
+	RecordAuthAttempt(context.Background(), StatusFailure, 1*time.Millisecond)
+
+	rm := collectMetrics(t, reader)
+	counter := findSum[int64](t, rm, "make_mcp_auth_attempts_total")
+	histogram := findHistogram[float64](t, rm, "make_mcp_auth_attempt_duration_seconds")
+
+	if !hasInt64Point(counter, map[string]string{"status": StatusSuccess}, 1) {
+		t.Fatalf("auth_attempts_total missing success point: %#v", counter.DataPoints)
+	}
+	if !hasInt64Point(counter, map[string]string{"status": StatusFailure}, 1) {
+		t.Fatalf("auth_attempts_total missing failure point: %#v", counter.DataPoints)
+	}
+	if !hasFloat64HistogramPoint(histogram, map[string]string{"status": StatusSuccess}, 1) {
+		t.Fatalf("auth_attempt_duration_seconds missing success point: %#v", histogram.DataPoints)
+	}
+}
+
+func TestRecordResourcesListRequest(t *testing.T) {
+	reader := setupManualMeter(t)
+
+	RecordResourcesListRequest(context.Background(), StatusSuccess, 3*time.Millisecond, 5)
+
+	rm := collectMetrics(t, reader)
+	counter := findSum[int64](t, rm, "make_mcp_resources_listed_total")
+	durHist := findHistogram[float64](t, rm, "make_mcp_resources_list_request_duration_seconds")
+	countHist := findHistogram[int64](t, rm, "make_mcp_resources_list_file_count")
+
+	if !hasInt64Point(counter, map[string]string{"status": StatusSuccess}, 5) {
+		t.Fatalf("resources_listed_total: got wrong count: %#v", counter.DataPoints)
+	}
+	if !hasFloat64HistogramPoint(durHist, map[string]string{"status": StatusSuccess}, 1) {
+		t.Fatalf("resources_list_request_duration_seconds: missing point: %#v", durHist.DataPoints)
+	}
+	if !hasInt64HistogramPoint(countHist, map[string]string{"status": StatusSuccess}, 1) {
+		t.Fatalf("resources_list_file_count: missing point: %#v", countHist.DataPoints)
+	}
+}
+
+func TestRecordResourcesRead(t *testing.T) {
+	reader := setupManualMeter(t)
+
+	RecordResourcesRead(context.Background(), StatusSuccess, 4*time.Millisecond, 1, 32, 1024)
+
+	rm := collectMetrics(t, reader)
+	counter := findSum[int64](t, rm, "make_mcp_resources_read_total")
+	durHist := findHistogram[float64](t, rm, "make_mcp_resources_read_duration_seconds")
+	fileHist := findHistogram[int64](t, rm, "make_mcp_resources_read_file_count")
+	bytesIn := findHistogram[int64](t, rm, "make_mcp_resources_read_bytes_in")
+	bytesOut := findHistogram[int64](t, rm, "make_mcp_resources_read_bytes_out")
+
+	if !hasInt64Point(counter, map[string]string{"status": StatusSuccess}, 1) {
+		t.Fatalf("resources_read_total: missing success point: %#v", counter.DataPoints)
+	}
+	if !hasFloat64HistogramPoint(durHist, map[string]string{"status": StatusSuccess}, 1) {
+		t.Fatalf("resources_read_duration_seconds: missing point: %#v", durHist.DataPoints)
+	}
+	if !hasInt64HistogramPoint(fileHist, map[string]string{"status": StatusSuccess}, 1) {
+		t.Fatalf("resources_read_file_count: missing point: %#v", fileHist.DataPoints)
+	}
+	if !hasInt64HistogramPoint(bytesIn, map[string]string{"status": StatusSuccess}, 1) {
+		t.Fatalf("resources_read_bytes_in: missing point: %#v", bytesIn.DataPoints)
+	}
+	if !hasInt64HistogramPoint(bytesOut, map[string]string{"status": StatusSuccess}, 1) {
+		t.Fatalf("resources_read_bytes_out: missing point: %#v", bytesOut.DataPoints)
+	}
+}
+
+func TestRecordFilesWatched(t *testing.T) {
+	reader := setupManualMeter(t)
+
+	RecordFilesWatched(context.Background(), 3)
+	RecordFilesWatched(context.Background(), -1) // remove one; total should not increment for negative
+
+	rm := collectMetrics(t, reader)
+	_ = findSum[int64](t, rm, "make_mcp_files_watched_total")
+}
+
+func TestRecordResourceSubscription(t *testing.T) {
+	reader := setupManualMeter(t)
+
+	RecordResourceSubscription(context.Background(), "subscribe", 1)
+	RecordResourceSubscription(context.Background(), "unsubscribe", -1)
+
+	rm := collectMetrics(t, reader)
+	counter := findSum[int64](t, rm, "make_mcp_resource_subscriptions_total")
+
+	if !hasInt64Point(counter, map[string]string{"action": "subscribe"}, 1) {
+		t.Fatalf("resource_subscriptions_total missing subscribe point: %#v", counter.DataPoints)
+	}
+	if !hasInt64Point(counter, map[string]string{"action": "unsubscribe"}, 1) {
+		t.Fatalf("resource_subscriptions_total missing unsubscribe point: %#v", counter.DataPoints)
+	}
+}
+
+func TestRecordResourceNotification(t *testing.T) {
+	reader := setupManualMeter(t)
+
+	RecordResourceNotification(context.Background(), StatusSuccess, 500*time.Microsecond)
+
+	rm := collectMetrics(t, reader)
+	hist := findHistogram[float64](t, rm, "make_mcp_resource_notification_duration_seconds")
+
+	if !hasFloat64HistogramPoint(hist, map[string]string{"status": StatusSuccess}, 1) {
+		t.Fatalf("resource_notification_duration_seconds: missing point: %#v", hist.DataPoints)
+	}
+}
+
 func setupManualMeter(t *testing.T) *sdkmetric.ManualReader {
 	t.Helper()
 
@@ -278,6 +389,15 @@ func hasInt64Point(sum metricdata.Sum[int64], wantLabels map[string]string, want
 func hasInt64GaugePoint(gauge metricdata.Gauge[int64], wantLabels map[string]string, wantValue int64) bool {
 	for _, point := range gauge.DataPoints {
 		if point.Value == wantValue && pointHasLabels(point.Attributes, wantLabels) {
+			return true
+		}
+	}
+	return false
+}
+
+func hasInt64HistogramPoint(histogram metricdata.Histogram[int64], wantLabels map[string]string, wantCount uint64) bool {
+	for _, point := range histogram.DataPoints {
+		if point.Count == wantCount && pointHasLabels(point.Attributes, wantLabels) {
 			return true
 		}
 	}

@@ -1,6 +1,7 @@
 SHELL=/usr/bin/env bash
 
 LGTM_VERSION := 0.23.0
+KEYCLOAK_VERSION := 26.6.0
 VENV ?= .venv
 DEV_DIR = ./dev
 _LOG_DIR := $(DEV_DIR)/logs
@@ -20,9 +21,13 @@ OTEL_EXPORTER_OTLP_ENDPOINT ?= http://host.docker.internal:4317
 OTEL_EXPORTER_OTLP_INSECURE ?= true
 OTEL_SERVICE_NAME ?= make-mcp-server
 OTEL_METRIC_EXPORT_INTERVAL ?= 2000
+OAUTH ?= false
+CERTS_DIR ?= $(DEV_DIR)/certs
+
 _DEV_LGTM_COMPOSE := -f "$(DEV_DIR)/docker-compose.lgtm.yml"
 _DEV_GRAFANA_MCP_COMPOSE := -f "$(DEV_DIR)/docker-compose.grafana-mcp.yml"
-_DEV_FULL_COMPOSE := $(_DEV_LGTM_COMPOSE) $(_DEV_GRAFANA_MCP_COMPOSE)
+_DEV_KEYCLOAK_COMPOSE := $(if $(filter true,$(OAUTH)),-f "$(DEV_DIR)/docker-compose.keycloak.yml",)
+_DEV_FULL_COMPOSE := $(_DEV_LGTM_COMPOSE) $(_DEV_GRAFANA_MCP_COMPOSE) $(_DEV_KEYCLOAK_COMPOSE)
 _INTEGRATION_SERVER_COMPOSE := -f "$(DEV_DIR)/docker-compose.integration.server.yml"
 _INTEGRATION_RUNNER_COMPOSE := -f "$(DEV_DIR)/docker-compose.integration.runner.yml"
 _INTEGRATION_STACK_COMPOSE := $(_INTEGRATION_SERVER_COMPOSE) $(_INTEGRATION_RUNNER_COMPOSE)
@@ -72,7 +77,7 @@ setup-python:
 # Writes compose_versions, creates GEMINI.md symlink, installs Node and Python deps.
 .PHONY: setup-env
 setup-env: setup-python
-	printf "LGTM_VERSION=$(LGTM_VERSION)" > "$(DEV_DIR)/compose_versions"
+	printf "LGTM_VERSION=$(LGTM_VERSION)\nKEYCLOAK_VERSION=$(KEYCLOAK_VERSION)" > "$(DEV_DIR)/compose_versions"
 	ln -sf AGENTS.md GEMINI.md
 	npm install
 
@@ -232,4 +237,5 @@ dev-mcp-inspector: build-mcp-server
 # Run 'make mcp-server-up' first to ensure the server is running.
 .PHONY: dev-mcp-inspector-http
 dev-mcp-inspector-http:
-	npx @modelcontextprotocol/inspector http://localhost:9378/mcp ;
+	NODE_EXTRA_CA_CERTS="$(CERTS_DIR)/ca.crt" \
+	npx @modelcontextprotocol/inspector https://localhost:9378/mcp ;
