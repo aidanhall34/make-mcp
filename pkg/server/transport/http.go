@@ -20,12 +20,13 @@ import (
 
 // HTTPServer serves streamable HTTP MCP plus health endpoints.
 type HTTPServer struct {
-	inner     *mcpserver.StreamableHTTPServer
-	server    *http.Server
-	tlsCert   string
-	tlsKey    string
-	issuer    string
-	validator *auth.Validator
+	inner      *mcpserver.StreamableHTTPServer
+	server     *http.Server
+	tlsCert    string
+	tlsKey     string
+	issuer     string
+	corsOrigin string
+	validator  *auth.Validator
 }
 
 // HTTPServerOption is a functional option for NewHTTPServer.
@@ -56,6 +57,18 @@ func WithOAuthIssuer(issuer string) HTTPServerOption {
 	}
 }
 
+// WithCORSOrigin restricts which browser origins may access the /mcp endpoint.
+// Provide a full origin URL (e.g. "https://claude.ai"). An empty string or "*"
+// permits any origin (permissive, suitable for local development). When a
+// specific origin is configured, Access-Control-Allow-Origin is only set when
+// the request Origin header matches exactly; non-matching origins receive no
+// CORS headers and are blocked by the browser.
+func WithCORSOrigin(origin string) HTTPServerOption {
+	return func(s *HTTPServer) {
+		s.corsOrigin = origin
+	}
+}
+
 // NewHTTPServer creates the HTTP transport wrapper.
 func NewHTTPServer(toolServer *rootserver.ToolServer, addr string, opts ...HTTPServerOption) *HTTPServer {
 	s := &HTTPServer{}
@@ -69,7 +82,7 @@ func NewHTTPServer(toolServer *rootserver.ToolServer, addr string, opts ...HTTPS
 	mux := http.NewServeMux()
 
 	// MCP endpoint — wrapped with CORS, trace propagation, and optional Bearer auth.
-	mcpHandler := corsMiddleware(propagateTraceContext(bearerMiddleware(s, inner)))
+	mcpHandler := corsMiddleware(s.corsOrigin, propagateTraceContext(bearerMiddleware(s, inner)))
 	mux.Handle("/mcp", mcpHandler)
 
 	// Health/readiness probes — always open.
@@ -149,15 +162,37 @@ func bearerMiddleware(s *HTTPServer, next http.Handler) http.Handler {
 	})
 }
 
-// corsMiddleware adds permissive CORS headers required by browser-based MCP
-// clients (e.g. MCP Inspector). It handles preflight OPTIONS requests and
-// exposes the mcp-session-id response header so JavaScript can read it.
-func corsMiddleware(next http.Handler) http.Handler {
+// corsMiddleware adds CORS headers for browser-based MCP clients (e.g. MCP
+// Inspector). It handles preflight OPTIONS requests and exposes the
+// mcp-session-id response header so JavaScript can read it.
+//
+// allowedOrigin controls the policy:
+//   - "" or "*" – wildcard; any browser origin is permitted (development default).
+//   - specific URL – Access-Control-Allow-Origin is only set when the request
+//     Origin header matches exactly. Non-matching origins receive no CORS headers
+//     so the browser blocks the cross-origin request. Vary: Origin is added to
+//     prevent incorrect cache sharing between origins.
+func corsMiddleware(allowedOrigin string, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, mcp-session-id, mcp-protocol-version, Last-Event-ID")
-		w.Header().Set("Access-Control-Expose-Headers", "mcp-session-id")
+		requestOrigin := r.Header.Get("Origin")
+
+		headersSet := false
+		switch {
+		case allowedOrigin == "" || allowedOrigin == "*":
+			w.Header().Set("Access-Control-Allow-Origin", "*")
+			headersSet = true
+		case requestOrigin != "" && requestOrigin == allowedOrigin:
+			w.Header().Set("Access-Control-Allow-Origin", requestOrigin)
+			w.Header().Add("Vary", "Origin")
+			headersSet = true
+		}
+
+		if headersSet {
+			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, mcp-session-id, mcp-protocol-version, Last-Event-ID")
+			w.Header().Set("Access-Control-Expose-Headers", "mcp-session-id")
+		}
+
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusNoContent)
 			return

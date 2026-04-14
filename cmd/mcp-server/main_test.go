@@ -646,8 +646,8 @@ func TestRun_OAuthMissingTLS(t *testing.T) {
 
 	if err := run([]string{"--config", f.Name(), "--makefile", "../../testdata/Makefile"}); err == nil {
 		t.Error("expected error for missing TLS cert/key, got nil")
-	} else if !strings.Contains(err.Error(), "oauth.tls.cert and oauth.tls.key are required") {
-		t.Errorf("expected error message to contain 'oauth.tls.cert and oauth.tls.key are required', got %v", err)
+	} else if !strings.Contains(err.Error(), "tls.cert and tls.key are required") {
+		t.Errorf("expected error message to contain 'tls.cert and tls.key are required', got %v", err)
 	}
 }
 
@@ -656,7 +656,7 @@ func TestRun_OAuthMissingJWKS(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	f.WriteString("oauth:\n  enabled: true\n  tls:\n    cert: a.crt\n    key: a.key\ntransport: http\n")
+	f.WriteString("tls:\n  cert: a.crt\n  key: a.key\noauth:\n  enabled: true\ntransport: http\n")
 	f.Close()
 
 	if err := run([]string{"--config", f.Name(), "--makefile", "../../testdata/Makefile"}); err == nil {
@@ -676,13 +676,13 @@ func TestRun_OAuthNewHTTPClientError(t *testing.T) {
 		t.Fatal(err)
 	}
 	content := fmt.Sprintf(`
+tls:
+  cert: a.crt
+  key: a.key
+  ca: "%s"
 oauth:
   enabled: true
   jwks_uri: http://example.com/jwks
-  tls:
-    cert: a.crt
-    key: a.key
-    ca: "%s"
 transport: http
 `, caFile)
 	f.WriteString(content)

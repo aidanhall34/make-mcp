@@ -27,6 +27,15 @@ transport: "stdio"
 # Default: "127.0.0.1:9378"
 listen: "127.0.0.1:9378"
 
+# Allowed browser origin for CORS on the HTTP /mcp endpoint.
+# When empty or "*" any origin is permitted — suitable for local development
+# and the MCP Inspector. In production, set this to the exact URL of your
+# web client (e.g. "https://claude.ai") so the browser blocks cross-origin
+# requests from all other origins. Has no effect on the stdio transport or
+# on non-browser clients (curl, CLI tools, server-to-server calls).
+# Default: "" (wildcard — any origin allowed)
+cors_origin: ""
+
 # Per-risk execution timeouts.
 # Default: 10m for all risk levels.
 timeouts:
@@ -43,6 +52,30 @@ log_path: "stderr"
 # When true, tool call arguments, stdout, and stderr are included in logs.
 # Default: false
 debug: false
+
+# TLS certificate paths and HTTP security settings for the HTTP server.
+# When cert and key are set, the server listens on HTTPS instead of HTTP.
+# tls.cert and tls.key are required when oauth.enabled is true.
+# ca is optional: provide it when the JWKS endpoint (oauth.jwks_uri) uses a
+# self-signed or private CA certificate that the system pool won't trust.
+# cors_origin locks browser cross-origin access; empty = any origin allowed.
+# tls:
+#   cert:        ./dev/certs/server.crt   # PEM-encoded server certificate
+#   key:         ./dev/certs/server.key   # PEM-encoded server private key
+#   ca:          ./dev/certs/ca.crt       # optional — CA cert for JWKS trust
+#   cors_origin: "https://claude.ai"      # optional — restrict browser origins
+
+# OAuth 2.1 Bearer token authentication (HTTP transport only).
+# tls.cert and tls.key are mandatory when oauth.enabled is true.
+# oauth:
+#   enabled: false
+#   issuer:   "https://auth.example.com/realms/make-mcp"
+#   audience: "make-mcp"
+#   jwks_uri: "https://auth.example.com/realms/make-mcp/protocol/openid-connect/certs"
+#   groups:
+#     - name: "/admins"
+#       resources:
+#         - "config"
 ```
 
 OpenTelemetry exporter behavior is configured with the standard environment

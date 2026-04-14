@@ -5,22 +5,34 @@ services:
       - start-dev
       - --https-certificate-file=/certs/server.crt
       - --https-certificate-key-file=/certs/server.key
+      - --https-management-certificate-file=/certs/server.crt
+      - --https-management-certificate-key-file=/certs/server.key
+      - --import-realm
+      - --optimized
+      - --hostname=keycloak
     environment:
-      KC_HOSTNAME: localhost
+      KC_HOSTNAME: keycloak
       KC_HTTPS_PORT: "8443"
       KC_HTTP_ENABLED: "false"
       KEYCLOAK_ADMIN: admin
       KEYCLOAK_ADMIN_PASSWORD: admin
+      KC_HEALTH_ENABLED: true
+      KC_METRICS_ENABLED: true
+      # OpenTelemetry — traces are GA in 26.x; logs and metrics require preview
+      # features baked into the image so they are left disabled here by default.
+      KC_TRACING_ENABLED: "true"
+      KC_TELEMETRY_ENDPOINT: "http://make-mcp-lgtm:4317"
+      KC_TELEMETRY_SERVICE_NAME: "keycloak"
+      KC_TELEMETRY_PROTOCOL: "grpc"
     ports:
       - "8443:8443"
     volumes:
       - ./certs:/certs:ro
+      - ./keycloak:/opt/keycloak/data/import:ro
     healthcheck:
       test:
         - CMD-SHELL
-        - >
-          curl -sf https://localhost:8443/realms/master/.well-known/openid-configuration
-          --cacert /certs/ca.crt || exit 1
+        - timeout 5 bash -c '</dev/tcp/localhost/9000'
       interval: 10s
       timeout: 5s
       retries: 10

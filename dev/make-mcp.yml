@@ -21,3 +21,11 @@ timeouts:
   low: 10m
   medium: 10m
   high: 10m
+
+# TLS disabled — plain HTTP for local development.
+# To enable HTTPS, uncomment and point at the generated certs (make gen-certs).
+# tls:
+#   cert: ./dev/certs/server.crt
+#   key:  ./dev/certs/server.key
+#   ca:   ./dev/certs/ca.crt
+#   cors_origin: ""   # set to a specific origin to lock down browser access

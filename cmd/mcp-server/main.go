@@ -97,8 +97,8 @@ func run(args []string) error {
 		if cfg.Transport == "stdio" {
 			return fmt.Errorf("oauth is not compatible with stdio transport; use http or both")
 		}
-		if cfg.OAuth.TLS.Cert == "" || cfg.OAuth.TLS.Key == "" {
-			return fmt.Errorf("oauth.tls.cert and oauth.tls.key are required when oauth is enabled")
+		if cfg.TLS.Cert == "" || cfg.TLS.Key == "" {
+			return fmt.Errorf("tls.cert and tls.key are required when oauth is enabled")
 		}
 		if cfg.OAuth.JWKSURI == "" {
 			return fmt.Errorf("oauth.jwks_uri is required when oauth is enabled")
@@ -162,7 +162,7 @@ func run(args []string) error {
 	// Build the OAuth validator when OAuth is enabled.
 	var validator *auth.Validator
 	if cfg.OAuth.Enabled {
-		httpClient, err := auth.NewHTTPClient(cfg.OAuth.TLS)
+		httpClient, err := auth.NewHTTPClient(cfg.TLS)
 		if err != nil {
 			return fmt.Errorf("auth: build HTTP client: %w", err)
 		}
@@ -246,8 +246,9 @@ func run(args []string) error {
 	if cfg.Transport == "http" || cfg.Transport == "both" {
 		httpServer = transport.NewHTTPServer(server, cfg.Listen,
 			transport.WithValidator(validator),
-			transport.WithTLS(cfg.OAuth.TLS),
+			transport.WithTLS(cfg.TLS),
 			transport.WithOAuthIssuer(cfg.OAuth.Issuer),
+			transport.WithCORSOrigin(cfg.TLS.CORSOrigin),
 		)
 		telemetry.Metrics().ConnectedClients.Add(ctx, 1, metric.WithAttributes(attribute.String("transport", "http")))
 		go func() {

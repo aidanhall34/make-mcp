@@ -27,7 +27,9 @@ type Timeouts struct {
 	High   time.Duration `yaml:"high"`
 }
 
-// TLSConfig holds TLS certificate paths for the HTTP server.
+// TLSConfig holds TLS certificate paths and HTTP security settings for the
+// HTTP server. When Cert and Key are set the server listens on HTTPS instead
+// of plain HTTP.
 type TLSConfig struct {
 	// Cert is the path to the PEM-encoded server certificate.
 	Cert string `yaml:"cert"`
@@ -36,6 +38,13 @@ type TLSConfig struct {
 	// CA is an optional path to a PEM-encoded CA certificate used to trust
 	// self-signed certificates (e.g. a local Keycloak instance).
 	CA string `yaml:"ca"`
+	// CORSOrigin restricts which browser origins may access the HTTP /mcp
+	// endpoint. Empty or "*" permits any origin (suitable for local
+	// development and MCP Inspector). When set to a specific URL (e.g.
+	// "https://claude.ai"), Access-Control-Allow-Origin is only set when the
+	// request Origin header matches exactly; all other browser origins are
+	// blocked. Has no effect on non-browser clients or the stdio transport.
+	CORSOrigin string `yaml:"cors_origin"`
 }
 
 // ResourcePath describes a named set of files, directories, or globs to expose
@@ -84,9 +93,6 @@ type OAuthConfig struct {
 	Audience string `yaml:"audience"`
 	// JWKSURI is the URL of the JSON Web Key Set used to validate token signatures.
 	JWKSURI string `yaml:"jwks_uri"`
-	// TLS configures the server certificate/key for HTTPS (required when OAuth
-	// is enabled) and an optional CA for trusting the JWKS endpoint.
-	TLS TLSConfig `yaml:"tls"`
 	// Groups maps OAuth group/role names to the resource path groups they may read.
 	Groups []OAuthGroupBinding `yaml:"groups"`
 }
@@ -109,6 +115,11 @@ type Config struct {
 
 	// Listen is the HTTP bind address when HTTP transport is enabled.
 	Listen string `yaml:"listen"`
+
+	// TLS holds certificate paths and HTTP security settings for the HTTP
+	// server. When TLS.Cert and TLS.Key are set, the server listens on HTTPS.
+	// TLS.Cert and TLS.Key are required when OAuth is enabled.
+	TLS TLSConfig `yaml:"tls"`
 
 	// LogPath is the destination for JSON logs. Defaults to stderr.
 	LogPath string `yaml:"log_path"`
@@ -180,6 +191,18 @@ func Merge(base, override Config) Config {
 	}
 	if override.Listen != "" {
 		out.Listen = override.Listen
+	}
+	if override.TLS.Cert != "" {
+		out.TLS.Cert = override.TLS.Cert
+	}
+	if override.TLS.Key != "" {
+		out.TLS.Key = override.TLS.Key
+	}
+	if override.TLS.CA != "" {
+		out.TLS.CA = override.TLS.CA
+	}
+	if override.TLS.CORSOrigin != "" {
+		out.TLS.CORSOrigin = override.TLS.CORSOrigin
 	}
 	if override.LogPath != "" {
 		out.LogPath = override.LogPath

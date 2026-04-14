@@ -1,7 +1,6 @@
 SHELL=/usr/bin/env bash
 
 include dev/makefiles/helper.mk
-include dev/makefiles/certs.mk
 include dev/makefiles/ci.mk
 include dev/makefiles/go.mk
 include dev/makefiles/lint.mk

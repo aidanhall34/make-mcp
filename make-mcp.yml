@@ -26,6 +26,17 @@ transport: "stdio"
 # Default: "127.0.0.1:9378"
 listen: "127.0.0.1:9378"
 
+# tls: HTTPS certificate paths and HTTP security settings.
+# When cert and key are set the server switches to HTTPS.
+# cert and key are required when oauth.enabled is true.
+# ca is optional: used to trust self-signed certs on the JWKS endpoint.
+# cors_origin locks cross-origin browser access; empty = any origin allowed.
+# tls:
+#   cert: ./dev/certs/server.crt
+#   key:  ./dev/certs/server.key
+#   ca:   ./dev/certs/ca.crt
+#   cors_origin: "https://claude.ai"
+
 # log_path: destination for JSON logs.
 # One of: stderr, or a file path.
 # Default: "stderr"
@@ -60,16 +71,12 @@ timeouts:
 #       recursive: false     # overrides top-level default
 
 # oauth: Bearer token authentication via an external OIDC provider.
-# Requires transport: http or both. TLS is mandatory when enabled.
+# Requires transport: http or both. tls.cert and tls.key are mandatory when enabled.
 # oauth:
 #   enabled: false
 #   issuer: "https://localhost:8443/realms/make-mcp"
 #   audience: "make-mcp"
 #   jwks_uri: "https://localhost:8443/realms/make-mcp/protocol/openid-connect/certs"
-#   tls:
-#     cert: ./dev/certs/server.crt
-#     key:  ./dev/certs/server.key
-#     ca:   ./dev/certs/ca.crt   # custom CA for validating the JWKS endpoint
 #   groups:
 #     - name: "/admins"
 #       resources:

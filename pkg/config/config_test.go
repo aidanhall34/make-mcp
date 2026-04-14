@@ -297,15 +297,16 @@ func TestLoadFile_OAuthBlock(t *testing.T) {
 	content := `
 makefiles:
   - ./makefile
+tls:
+  cert: ./certs/server.crt
+  key: ./certs/server.key
+  ca: ./certs/ca.crt
+  cors_origin: "https://claude.ai"
 oauth:
   enabled: true
   issuer: "https://localhost:8443/realms/make-mcp"
   audience: "make-mcp"
   jwks_uri: "https://localhost:8443/realms/make-mcp/protocol/openid-connect/certs"
-  tls:
-    cert: ./certs/server.crt
-    key: ./certs/server.key
-    ca: ./certs/ca.crt
   groups:
     - name: "admins"
       resources:
@@ -334,14 +335,17 @@ oauth:
 	if cfg.OAuth.JWKSURI != "https://localhost:8443/realms/make-mcp/protocol/openid-connect/certs" {
 		t.Errorf("oauth.jwks_uri: got %q", cfg.OAuth.JWKSURI)
 	}
-	if cfg.OAuth.TLS.Cert != "./certs/server.crt" {
-		t.Errorf("oauth.tls.cert: got %q", cfg.OAuth.TLS.Cert)
+	if cfg.TLS.Cert != "./certs/server.crt" {
+		t.Errorf("tls.cert: got %q", cfg.TLS.Cert)
 	}
-	if cfg.OAuth.TLS.Key != "./certs/server.key" {
-		t.Errorf("oauth.tls.key: got %q", cfg.OAuth.TLS.Key)
+	if cfg.TLS.Key != "./certs/server.key" {
+		t.Errorf("tls.key: got %q", cfg.TLS.Key)
 	}
-	if cfg.OAuth.TLS.CA != "./certs/ca.crt" {
-		t.Errorf("oauth.tls.ca: got %q", cfg.OAuth.TLS.CA)
+	if cfg.TLS.CA != "./certs/ca.crt" {
+		t.Errorf("tls.ca: got %q", cfg.TLS.CA)
+	}
+	if cfg.TLS.CORSOrigin != "https://claude.ai" {
+		t.Errorf("tls.cors_origin: got %q", cfg.TLS.CORSOrigin)
 	}
 	if len(cfg.OAuth.Groups) != 1 {
 		t.Fatalf("oauth.groups: got %d, want 1", len(cfg.OAuth.Groups))
@@ -463,5 +467,72 @@ func TestMerge_PageSizeBasePreservedWhenOverrideZero(t *testing.T) {
 	result := config.Merge(base, config.Config{})
 	if result.PageSize != 25 {
 		t.Errorf("merge page_size: base not preserved, got %d", result.PageSize)
+	}
+}
+
+func TestMerge_TLSOverride(t *testing.T) {
+	base := config.Config{
+		TLS: config.TLSConfig{
+			Cert:       "old.crt",
+			Key:        "old.key",
+			CA:         "old-ca.crt",
+			CORSOrigin: "https://old.example.com",
+		},
+	}
+	override := config.Config{
+		TLS: config.TLSConfig{
+			Cert:       "new.crt",
+			Key:        "new.key",
+			CA:         "new-ca.crt",
+			CORSOrigin: "https://new.example.com",
+		},
+	}
+
+	result := config.Merge(base, override)
+	if result.TLS.Cert != "new.crt" {
+		t.Errorf("tls.cert: got %q, want new.crt", result.TLS.Cert)
+	}
+	if result.TLS.Key != "new.key" {
+		t.Errorf("tls.key: got %q, want new.key", result.TLS.Key)
+	}
+	if result.TLS.CA != "new-ca.crt" {
+		t.Errorf("tls.ca: got %q, want new-ca.crt", result.TLS.CA)
+	}
+	if result.TLS.CORSOrigin != "https://new.example.com" {
+		t.Errorf("tls.cors_origin: got %q, want https://new.example.com", result.TLS.CORSOrigin)
+	}
+}
+
+func TestMerge_TLSBasePreservedWhenOverrideEmpty(t *testing.T) {
+	base := config.Config{
+		TLS: config.TLSConfig{
+			Cert:       "base.crt",
+			Key:        "base.key",
+			CA:         "base-ca.crt",
+			CORSOrigin: "https://base.example.com",
+		},
+	}
+
+	result := config.Merge(base, config.Config{})
+	if result.TLS.Cert != "base.crt" {
+		t.Errorf("tls.cert: base not preserved, got %q", result.TLS.Cert)
+	}
+	if result.TLS.Key != "base.key" {
+		t.Errorf("tls.key: base not preserved, got %q", result.TLS.Key)
+	}
+	if result.TLS.CA != "base-ca.crt" {
+		t.Errorf("tls.ca: base not preserved, got %q", result.TLS.CA)
+	}
+	if result.TLS.CORSOrigin != "https://base.example.com" {
+		t.Errorf("tls.cors_origin: base not preserved, got %q", result.TLS.CORSOrigin)
+	}
+}
+
+func TestMerge_LogPathOverride(t *testing.T) {
+	base := config.Config{LogPath: "stderr"}
+	override := config.Config{LogPath: "/var/log/make-mcp.log"}
+	result := config.Merge(base, override)
+	if result.LogPath != "/var/log/make-mcp.log" {
+		t.Errorf("log_path: got %q, want /var/log/make-mcp.log", result.LogPath)
 	}
 }

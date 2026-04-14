@@ -126,28 +126,35 @@ func TestHTTPServer_Start(t *testing.T) {
 	}
 }
 
-func TestCORSMiddleware_SetsHeaders(t *testing.T) {
-	handler := corsMiddleware(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	}))
+func TestCORSMiddleware_Wildcard_SetsHeaders(t *testing.T) {
+	for _, origin := range []string{"", "*"} {
+		t.Run("allowedOrigin="+origin, func(t *testing.T) {
+			handler := corsMiddleware(origin, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.WriteHeader(http.StatusOK)
+			}))
 
-	req := httptest.NewRequest(http.MethodPost, "/mcp", nil)
-	rr := httptest.NewRecorder()
-	handler.ServeHTTP(rr, req)
+			req := httptest.NewRequest(http.MethodPost, "/mcp", nil)
+			rr := httptest.NewRecorder()
+			handler.ServeHTTP(rr, req)
 
-	if rr.Code != http.StatusOK {
-		t.Errorf("status = %d, want %d", rr.Code, http.StatusOK)
-	}
-	if got := rr.Header().Get("Access-Control-Allow-Origin"); got != "*" {
-		t.Errorf("Access-Control-Allow-Origin = %q, want %q", got, "*")
-	}
-	if got := rr.Header().Get("Access-Control-Expose-Headers"); got != "mcp-session-id" {
-		t.Errorf("Access-Control-Expose-Headers = %q, want %q", got, "mcp-session-id")
+			if rr.Code != http.StatusOK {
+				t.Errorf("status = %d, want %d", rr.Code, http.StatusOK)
+			}
+			if got := rr.Header().Get("Access-Control-Allow-Origin"); got != "*" {
+				t.Errorf("Access-Control-Allow-Origin = %q, want *", got)
+			}
+			if got := rr.Header().Get("Access-Control-Expose-Headers"); got != "mcp-session-id" {
+				t.Errorf("Access-Control-Expose-Headers = %q, want mcp-session-id", got)
+			}
+			if got := rr.Header().Get("Vary"); got != "" {
+				t.Errorf("Vary should be empty for wildcard, got %q", got)
+			}
+		})
 	}
 }
 
-func TestCORSMiddleware_PreflightOptions(t *testing.T) {
-	handler := corsMiddleware(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+func TestCORSMiddleware_Wildcard_PreflightOptions(t *testing.T) {
+	handler := corsMiddleware("", http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Error("inner handler should not be called for OPTIONS preflight")
 	}))
 
@@ -168,6 +175,123 @@ func TestCORSMiddleware_PreflightOptions(t *testing.T) {
 		if !strings.Contains(allowedHeaders, want) {
 			t.Errorf("Access-Control-Allow-Headers missing %q, got %q", want, allowedHeaders)
 		}
+	}
+}
+
+func TestCORSMiddleware_SpecificOrigin_MatchingRequest(t *testing.T) {
+	const allowed = "https://claude.ai"
+	handler := corsMiddleware(allowed, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	req := httptest.NewRequest(http.MethodPost, "/mcp", nil)
+	req.Header.Set("Origin", allowed)
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Errorf("status = %d, want %d", rr.Code, http.StatusOK)
+	}
+	if got := rr.Header().Get("Access-Control-Allow-Origin"); got != allowed {
+		t.Errorf("Access-Control-Allow-Origin = %q, want %q", got, allowed)
+	}
+	if got := rr.Header().Get("Vary"); !strings.Contains(got, "Origin") {
+		t.Errorf("Vary = %q, want it to contain Origin", got)
+	}
+	if got := rr.Header().Get("Access-Control-Expose-Headers"); got != "mcp-session-id" {
+		t.Errorf("Access-Control-Expose-Headers = %q, want mcp-session-id", got)
+	}
+}
+
+func TestCORSMiddleware_SpecificOrigin_NonMatchingRequest(t *testing.T) {
+	handler := corsMiddleware("https://claude.ai", http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	req := httptest.NewRequest(http.MethodPost, "/mcp", nil)
+	req.Header.Set("Origin", "https://attacker.example.com")
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+
+	// Request still passes through to the inner handler — browser enforces CORS
+	// on its side when ACAO is absent; server-side blocking is not required.
+	if rr.Code != http.StatusOK {
+		t.Errorf("status = %d, want %d", rr.Code, http.StatusOK)
+	}
+	if got := rr.Header().Get("Access-Control-Allow-Origin"); got != "" {
+		t.Errorf("Access-Control-Allow-Origin = %q, want empty for non-matching origin", got)
+	}
+	if got := rr.Header().Get("Access-Control-Allow-Methods"); got != "" {
+		t.Errorf("Access-Control-Allow-Methods = %q, want empty for non-matching origin", got)
+	}
+}
+
+func TestCORSMiddleware_SpecificOrigin_NoOriginHeader(t *testing.T) {
+	// Requests without an Origin header (curl, server-to-server) must not be
+	// blocked and receive no CORS headers (they don't need them).
+	var innerCalled bool
+	handler := corsMiddleware("https://claude.ai", http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		innerCalled = true
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	req := httptest.NewRequest(http.MethodGet, "/health", nil) // no Origin header
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+
+	if !innerCalled {
+		t.Error("inner handler not called for non-browser (no Origin) request")
+	}
+	if got := rr.Header().Get("Access-Control-Allow-Origin"); got != "" {
+		t.Errorf("Access-Control-Allow-Origin = %q, want empty when Origin header absent", got)
+	}
+}
+
+func TestCORSMiddleware_SpecificOrigin_PreflightMatching(t *testing.T) {
+	const allowed = "https://claude.ai"
+	handler := corsMiddleware(allowed, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		t.Error("inner handler should not be called for OPTIONS preflight")
+	}))
+
+	req := httptest.NewRequest(http.MethodOptions, "/mcp", nil)
+	req.Header.Set("Origin", allowed)
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusNoContent {
+		t.Errorf("status = %d, want %d", rr.Code, http.StatusNoContent)
+	}
+	if got := rr.Header().Get("Access-Control-Allow-Origin"); got != allowed {
+		t.Errorf("Access-Control-Allow-Origin = %q, want %q", got, allowed)
+	}
+	if got := rr.Header().Get("Vary"); !strings.Contains(got, "Origin") {
+		t.Errorf("Vary = %q, want it to contain Origin", got)
+	}
+}
+
+func TestCORSMiddleware_SpecificOrigin_PreflightNonMatching(t *testing.T) {
+	handler := corsMiddleware("https://claude.ai", http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		t.Error("inner handler should not be called for OPTIONS preflight")
+	}))
+
+	req := httptest.NewRequest(http.MethodOptions, "/mcp", nil)
+	req.Header.Set("Origin", "https://attacker.example.com")
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusNoContent {
+		t.Errorf("status = %d, want %d", rr.Code, http.StatusNoContent)
+	}
+	if got := rr.Header().Get("Access-Control-Allow-Origin"); got != "" {
+		t.Errorf("Access-Control-Allow-Origin = %q, want empty — browser must block this preflight", got)
+	}
+}
+
+func TestWithCORSOrigin(t *testing.T) {
+	hs := &HTTPServer{}
+	WithCORSOrigin("https://claude.ai")(hs)
+	if hs.corsOrigin != "https://claude.ai" {
+		t.Errorf("corsOrigin = %q, want https://claude.ai", hs.corsOrigin)
 	}
 }
 
